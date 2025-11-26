@@ -1,0 +1,175 @@
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-dark: #09090b; /* Zinc 950 */
+  --bg-panel: #121215; /* Zinc 925 */
+  --border-color: #27272a; /* Zinc 800 */
+  --accent-primary: #ea580c; /* Orange 600 - Safety Orange */
+  --accent-secondary: #06b6d4; /* Cyan 500 */
+  --accent-tertiary: #84cc16; /* Lime 500 - Acid Green */
+  --text-dim: #71717a; /* Zinc 500 */
+  --grid-color: rgba(255, 255, 255, 0.03);
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-dark);
+  color: #e4e4e7; /* Zinc 200 */
+  font-family: 'Courier New', Courier, monospace; /* Brutalist Mono */
+  overflow: hidden;
+}
+
+/* --- TEXTURES & OVERLAYS --- */
+
+/* Film Grain / Dither Effect */
+.noise-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Subtle CRT Scanline */
+.scanline-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9998;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0) 50%,
+    rgba(0, 0, 0, 0.05) 50%,
+    rgba(0, 0, 0, 0.05)
+  );
+  background-size: 100% 3px;
+}
+
+/* Background Grid */
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+}
+
+.image-pixelated {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+
+/* --- COMPONENT STYLES --- */
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-dark); 
+  border-left: 1px solid var(--border-color);
+}
+::-webkit-scrollbar-thumb {
+  background: #3f3f46; 
+  border-radius: 0; 
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary); 
+}
+
+/* Range Input - Industrial Fader Style */
+input[type=range] {
+  -webkit-appearance: none; 
+  background: transparent; 
+  height: 20px;
+  cursor: pointer;
+}
+input[type=range]:focus {
+  outline: none;
+}
+/* Track */
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: #27272a;
+  border-radius: 0;
+}
+/* Thumb */
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 14px;
+  width: 8px;
+  background: #e4e4e7;
+  border: 1px solid #000;
+  margin-top: -5px; /* centers thumb on track */
+  box-shadow: 1px 1px 0px rgba(0,0,0,0.5);
+}
+input[type=range]:hover::-webkit-slider-thumb {
+    background: #fff;
+    border-color: var(--accent-primary);
+}
+
+/* Brutalist Panel */
+.panel-brutal {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    position: relative;
+}
+.panel-brutal::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 6px;
+    height: 6px;
+    background: var(--border-color);
+    clip-path: polygon(100% 0, 0 100%, 100% 100%);
+}
+
+.btn-retro {
+    border: 1px solid var(--border-color);
+    background: #18181b;
+    color: #a1a1aa;
+    transition: all 0.1s;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    font-size: 0.7rem;
+    font-family: 'Courier New', Courier, monospace;
+    position: relative;
+    overflow: hidden;
+}
+.btn-retro:hover {
+    background: #27272a;
+    color: #fff;
+    border-color: #52525b;
+}
+.btn-retro:active {
+    background: #09090b;
+    transform: translateY(1px);
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: #000;
+    border: 1px solid var(--accent-primary);
+    font-weight: 800;
+}
+.btn-primary:hover {
+    background: #ff6b2b;
+    border-color: #ff6b2b;
+    color: white;
+}
