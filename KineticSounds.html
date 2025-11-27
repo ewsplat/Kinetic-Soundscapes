@@ -1,0 +1,1535 @@
+html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BioGrid OS v4.0 (Performance Core)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+      }
+    }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap');
+
+        :root {
+            --bg-dark: #09090b;
+            --bg-panel: #121215;
+            --border-color: #27272a;
+            --accent-primary: #ea580c;
+            --grid-color: rgba(255, 255, 255, 0.03);
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: #e4e4e7;
+            font-family: 'Courier Prime', monospace;
+            overflow: hidden;
+        }
+
+        .noise-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 9999; opacity: 0.04;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        .scanline-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 9998;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.05));
+            background-size: 100% 3px;
+        }
+
+        .bg-grid-pattern {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+                linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+        }
+
+        .image-pixelated { image-rendering: pixelated; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); border-left: 1px solid var(--border-color); }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+
+        input[type=range] { -webkit-appearance: none; background: transparent; height: 20px; cursor: pointer; }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #27272a; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 14px; width: 8px; background: #e4e4e7;
+            border: 1px solid #000; margin-top: -5px; box-shadow: 1px 1px 0px rgba(0,0,0,0.5);
+        }
+
+        .panel-brutal { background-color: var(--bg-panel); border: 1px solid var(--border-color); position: relative; }
+        .panel-brutal::after {
+            content: ''; position: absolute; bottom: 0; right: 0; width: 6px; height: 6px;
+            background: var(--border-color); clip-path: polygon(100% 0, 0 100%, 100% 100%);
+        }
+
+        .btn-retro {
+            border: 1px solid var(--border-color); background: #18181b; color: #a1a1aa;
+            transition: all 0.1s; text-transform: uppercase; letter-spacing: 0.05em;
+            font-weight: 600; font-size: 0.7rem; font-family: inherit; position: relative; overflow: hidden;
+        }
+        .btn-retro:hover { background: #27272a; color: #fff; border-color: #52525b; }
+        .btn-retro:active { background: #09090b; transform: translateY(1px); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #121215; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useRef, useEffect } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Play, Pause, Power, Activity, Zap, Settings2, Download, Anchor, CloudFog, 
+            Shuffle, SlidersHorizontal, RefreshCw, X, Volume2, VolumeX, ChevronLeft, 
+            ChevronRight, Dices, Waves, Clock, Palette, Flame, ListMusic, Lock, Unlock, 
+            Headphones, GitCommit, Camera, FileVideo, Image as ImageIcon, Upload, Eye, 
+            EyeOff, Radio, Move, XCircle, Scissors, Wind, Snowflake, LayoutGrid, Disc, Speaker,
+            Save, FileUp, Globe, Database
+        } from 'lucide-react';
+
+        // ==========================================
+        // 0. GLOBAL CONSTANTS
+        // ==========================================
+        const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const SCALES_INTERVALS = {
+            pentatonic: [0, 2, 4, 7, 9], major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10],
+            dorian: [0, 2, 3, 5, 7, 9, 10], lydian: [0, 2, 4, 6, 7, 9, 11], chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+            phrygian: [0, 1, 3, 5, 7, 8, 10], harmonics: [0, 4, 7, 12, 16, 19, 24]
+        };
+        const VOWELS = { 'a': [800, 1200, 2500], 'e': [500, 2300, 3000], 'i': [300, 2700, 3200], 'o': [500, 1000, 2500], 'u': [300, 800, 2500] };
+
+        // ==========================================
+        // 1. MATH UTILS
+        // ==========================================
+        const add = (v1, v2) => ({ x: v1.x + v2.x, y: v1.y + v2.y });
+        const sub = (v1, v2) => ({ x: v1.x - v2.x, y: v1.y - v2.y });
+        const mult = (v, n) => ({ x: v.x * n, y: v.y * n });
+        const dot = (v1, v2) => v1.x * v2.x + v1.y * v2.y;
+        const mag = (v) => Math.sqrt(v.x * v.x + v.y * v.y);
+        const normalize = (v) => { const m = mag(v); return m === 0 ? { x: 0, y: 0 } : { x: v.x / m, y: v.y / m }; };
+        const limitVector = (v, max) => { const m = mag(v); return m > max ? mult(normalize(v), max) : v; };
+        
+        const generatePolygon = (sides, radius, center, rotation) => {
+            const points = [];
+            for (let i = 0; i < sides; i++) {
+                const angle = (i * 2 * Math.PI) / sides + rotation;
+                points.push({ x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) });
+            }
+            return points;
+        };
+
+        const generateStar = (points, outerRadius, innerRadius, center, rotation) => {
+            const verts = [];
+            for (let i = 0; i < points * 2; i++) {
+                const angle = (i * Math.PI) / points + rotation;
+                const r = i % 2 === 0 ? outerRadius : innerRadius;
+                verts.push({ x: center.x + r * Math.cos(angle), y: center.y + r * Math.sin(angle) });
+            }
+            return verts;
+        };
+
+        const checkEuclideanStep = (step, hits, steps) => Math.floor((step * hits) / steps) !== Math.floor(((step - 1) * hits) / steps);
+
+        // ==========================================
+        // 2. MUSIC UTILS
+        // ==========================================
+        const getFrequencyFromScale = (root, scale, octave, degree, drift = 0) => {
+            const rootIndex = NOTES.indexOf(root);
+            const intervals = SCALES_INTERVALS[scale];
+            const noteIndex = intervals[degree % intervals.length];
+            const octaveOffset = Math.floor(degree / intervals.length);
+            const midiNote = (rootIndex + noteIndex) + ((octave + octaveOffset + 1) * 12);
+            let freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+            if (drift > 0) freq += freq * (Math.random() - 0.5) * drift;
+            return freq;
+        };
+
+        // ==========================================
+        // 3. SOUND LIBRARY
+        // ==========================================
+        const createPatch = (id, name, category, color, config) => ({
+            id, name, category, themeColor: color,
+            config: {
+                sourceType: 'synth', waveform: 'sine', baseOctave: 4, attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.5,
+                vol: 0.8, pan: 0, timbre: 0.5, time: 0.5, color: 0.5, drive: 0.0, probability: 1.0, filterType: 'lowpass', filterFreq: 1000,
+                ...config
+            }
+        });
+
+        const SOUND_LIBRARY = [
+            createPatch('ana_bass', 'Moog Sub', 'Analog', '#e11d48', { waveform: 'sawtooth', baseOctave: 2, attack: 0.02, decay: 0.3, sustain: 0.8, release: 0.4, detuneAmount: 10, subLevel: 1.0, filterType: 'lowpass', filterFreq: 400, timbre: 0.6, color: 0.3, vol: 0.85, sidechainTarget: true }),
+            createPatch('ana_brass', 'Prophet Brass', 'Analog', '#d97706', { waveform: 'sawtooth', baseOctave: 3, attack: 0.15, decay: 0.4, sustain: 0.5, release: 1.2, detuneAmount: 15, filterType: 'lowpass', filterFreq: 1200, color: 0.7, vol: 0.7 }),
+            createPatch('ana_lead', 'Vintage Lead', 'Analog', '#f59e0b', { waveform: 'square', baseOctave: 4, attack: 0.01, decay: 0.2, sustain: 0.4, release: 0.3, detuneAmount: 5, wobbleAmount: 0.4, wobbleSpeed: 8, filterType: 'lowpass', filterFreq: 2000, color: 0.8, vol: 0.6 }),
+            createPatch('acd_sq', 'Acid Squall', 'Acid', '#84cc16', { waveform: 'sawtooth', baseOctave: 2, attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.1, filterType: 'lowpass', filterFreq: 800, filterQ: 2, timbre: 0.9, color: 0.6, drive: 0.5, vol: 0.7, sidechainTarget: true }),
+            createPatch('acd_tox', 'Toxic 303', 'Acid', '#a3e635', { waveform: 'square', baseOctave: 3, attack: 0.01, decay: 0.2, sustain: 0.0, release: 0.2, filterType: 'lowpass', filterFreq: 1200, filterQ: 2, color: 0.8, drive: 0.6, vol: 0.7 }),
+            createPatch('org_scrap', 'Scrap Metal', 'Organic', '#78716c', { waveform: 'triangle', baseOctave: 3, attack: 0.005, decay: 0.15, sustain: 0, release: 0.3, detuneAmount: 0, filterType: 'lowpass', filterFreq: 1200, timbre: 1.0, wobbleAmount: 0.2, color: 0.7, drive: 0.4, vol: 0.8 }),
+            createPatch('org_wood', 'Bamboo', 'Organic', '#a8a29e', { waveform: 'sine', baseOctave: 4, attack: 0.005, decay: 0.1, sustain: 0, release: 0.1, filterType: 'lowpass', filterFreq: 1500, vol: 0.8, color: 0.4 }),
+            createPatch('org_hydro', 'Hydro Phone', 'Organic', '#0ea5e9', { waveform: 'triangle', baseOctave: 4, attack: 0.05, decay: 0.3, sustain: 0.3, release: 0.6, filterType: 'bandpass', filterFreq: 800, wobbleAmount: 0.5, wobbleSpeed: 4, color: 0.5, vol: 0.7 }),
+            createPatch('chd_dub', 'Dub Minor', 'Chord', '#6366f1', { waveform: 'sawtooth', baseOctave: 3, attack: 0.02, decay: 0.4, sustain: 0.5, release: 1.5, detuneAmount: 5, filterType: 'lowpass', filterFreq: 600, time: 0.8, color: 0.4, vol: 0.7, sidechainTarget: true }),
+            createPatch('chd_rave', 'Rave Stack', 'Chord', '#ec4899', { waveform: 'sawtooth', baseOctave: 4, attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.4, detuneAmount: 20, filterType: 'lowpass', filterFreq: 2000, color: 0.8, drive: 0.2, vol: 0.6 }),
+            createPatch('voc_monk', 'Cyber Monk', 'Voice', '#fcd34d', { sourceType: 'formant', baseOctave: 2, attack: 0.5, decay: 1.0, sustain: 1.0, release: 1.0, vol: 0.6, color: 0.2, sidechainTarget: true }),
+            createPatch('voc_vowel', 'Vowel Bass', 'Voice', '#d97706', { sourceType: 'formant', baseOctave: 1, attack: 0.1, decay: 0.5, sustain: 0.8, release: 0.5, vol: 0.8, color: 0.8, drive: 0.4, sidechainTarget: true }),
+            createPatch('voc_choir', 'Cyber Choir', 'Voice', '#2dd4bf', { waveform: 'triangle', baseOctave: 4, attack: 0.4, decay: 0.6, sustain: 0.7, release: 1.0, detuneAmount: 15, filterType: 'lowpass', filterFreq: 1500, wobbleAmount: 0.1, time: 0.8, color: 0.6, vol: 0.7 }),
+            createPatch('voc_robot', 'AI Speech', 'Voice', '#14b8a6', { waveform: 'sawtooth', baseOctave: 3, attack: 0.05, decay: 0.2, sustain: 0.4, release: 0.3, bitCrush: 0.4, filterType: 'lowpass', filterFreq: 2000, wobbleAmount: 0.8, wobbleSpeed: 15, drive: 0.5, color: 0.6, vol: 0.7 }),
+            createPatch('cin_braam', 'Braam Hit', 'Cinematic', '#be123c', { waveform: 'sawtooth', baseOctave: 2, attack: 0.01, decay: 0.5, sustain: 0.5, release: 1.5, detuneAmount: 25, filterType: 'lowpass', filterFreq: 800, drive: 0.7, timbre: 0.8, color: 0.3, vol: 0.8, sidechainTarget: true }),
+            createPatch('cin_swarm', 'Horror Bow', 'Cinematic', '#9f1239', { waveform: 'sawtooth', baseOctave: 5, attack: 0.2, decay: 1.5, sustain: 0.8, release: 2.0, detuneAmount: 35, filterType: 'lowpass', filterFreq: 2000, wobbleAmount: 0.4, time: 0.9, color: 0.7, vol: 0.6 }),
+            createPatch('nse_static', 'High Voltage', 'Noise', '#a1a1aa', { waveform: 'square', baseOctave: 5, attack: 0.01, decay: 0.15, sustain: 0.1, release: 0.2, bitCrush: 0.8, filterType: 'lowpass', filterFreq: 4000, wobbleAmount: 1.0, drive: 0.8, color: 0.6, vol: 0.6 }),
+            createPatch('nse_geiger', 'Geiger', 'Noise', '#52525b', { waveform: 'square', baseOctave: 6, attack: 0.001, decay: 0.03, sustain: 0, release: 0.05, filterType: 'lowpass', filterFreq: 5000, drive: 1.0, vol: 0.8, color: 0.9 }),
+            createPatch('ret_jump', 'Game Jump', 'Retro', '#fbbf24', { waveform: 'square', baseOctave: 4, attack: 0.001, decay: 0.2, sustain: 0, release: 0.2, filterType: 'lowpass', filterFreq: 3000, bitCrush: 0.6, drive: 0.3, color: 0.8, vol: 0.7 }),
+            createPatch('dig_bell', 'Ice Bell', 'Digital', '#06b6d4', { waveform: 'sine', baseOctave: 5, attack: 0.01, decay: 0.4, sustain: 0.1, release: 1.5, detuneAmount: 5, filterType: 'lowpass', filterFreq: 3000, bitCrush: 0.2, timbre: 0.4, color: 0.8, vol: 0.6 }),
+            createPatch('dig_keys', 'FM Keys', 'Digital', '#3b82f6', { waveform: 'sine', baseOctave: 4, attack: 0.02, decay: 0.2, sustain: 0.4, release: 0.6, detuneAmount: 50, subLevel: 0, filterType: 'lowpass', filterFreq: 2500, wobbleAmount: 0.2, timbre: 0.8, color: 0.7, vol: 0.7 }),
+            createPatch('dig_rot', 'Bit Rot', 'Glitch', '#6366f1', { waveform: 'sawtooth', baseOctave: 2, attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.1, bitCrush: 0.8, downSample: 0.6, filterType: 'lowpass', filterFreq: 1500, wobbleAmount: 0.5, timbre: 0.9, drive: 0.8, vol: 0.7 }),
+            createPatch('dig_err', 'Server Crash', 'Glitch', '#ef4444', { waveform: 'square', baseOctave: 4, attack: 0.001, decay: 0.1, sustain: 0, release: 0.1, bitCrush: 0.9, filterType: 'lowpass', filterFreq: 3000, vol: 0.7, color: 0.9, drive: 0.9 }),
+            createPatch('dig_chime', 'Prism', 'Digital', '#d8b4fe', { waveform: 'sine', baseOctave: 6, attack: 0.01, decay: 0.3, sustain: 0, release: 0.8, vol: 0.6, color: 0.8, filterType: 'lowpass', filterFreq: 4000 }),
+            createPatch('dig_glitch', 'Data Rot', 'Glitch', '#6366f1', { waveform: 'sawtooth', baseOctave: 3, attack: 0.01, decay: 0.1, sustain: 0, release: 0.1, bitCrush: 0.9, downSample: 0.8, vol: 0.7, drive: 0.8, filterType: 'lowpass', filterFreq: 2000 }),
+            createPatch('grn_cloud', 'Cloud Tex', 'Granular', '#10b981', { sourceType: 'granular', waveform: 'sine', baseOctave: 4, attack: 0.5, decay: 0.5, sustain: 0.5, release: 0.5, grainSize: 0.2, grainJitter: 0.3, vol: 0.6, timbre: 0.5, color: 0.5 }),
+            createPatch('grn_time', 'Time Stretch', 'Granular', '#34d399', { sourceType: 'granular', waveform: 'sawtooth', baseOctave: 3, attack: 0.1, decay: 0.2, sustain: 0.4, release: 0.4, grainSize: 0.05, grainJitter: 0.1, vol: 0.6, timbre: 0.8, color: 0.7 }),
+            createPatch('atm_nebula', 'Nebula Pad', 'Atmosphere', '#8b5cf6', { waveform: 'sawtooth', baseOctave: 2, attack: 0.05, decay: 2.0, sustain: 1.0, release: 2.5, detuneAmount: 20, filterType: 'lowpass', filterFreq: 600, spatialMod: true, vol: 0.6, time: 0.9, color: 0.4, sidechainTarget: true }),
+            createPatch('atm_deep', 'Deep Space', 'Atmosphere', '#4c1d95', { waveform: 'sine', baseOctave: 1, attack: 0.1, decay: 1.0, sustain: 1.0, release: 3.0, subLevel: 1.0, filterType: 'lowpass', filterFreq: 300, vol: 0.6, timbre: 0.2, color: 0.2, sidechainTarget: true }),
+            createPatch('prc_kick', '808 Sub', 'Percussion', '#be123c', { sourceType: 'synth', drumType: '808', waveform: 'sine', baseOctave: 2, attack: 0.005, decay: 0.4, sustain: 0, release: 0.1, vol: 1.0, filterType: 'lowpass', filterFreq: 400, time: 0.3, color: 0.3, sidechainSource: true }),
+            createPatch('prc_click', 'Static Click', 'Percussion', '#94a3b8', { sourceType: 'synth', drumType: 'glitch', waveform: 'square', baseOctave: 6, attack: 0.001, decay: 0.05, sustain: 0, release: 0.05, filterType: 'lowpass', filterFreq: 4000, color: 0.8, drive: 0.5, vol: 0.8 }),
+            createPatch('prc_wood', 'Log Drum', 'Percussion', '#78350f', { waveform: 'sine', baseOctave: 3, attack: 0.01, decay: 0.1, sustain: 0, release: 0.1, filterType: 'lowpass', filterFreq: 600, detuneAmount: 15, color: 0.5, vol: 0.8 }),
+            createPatch('phy_koto', 'Koto Res', 'Physical', '#fde047', { sourceType: 'physical', baseOctave: 4, vol: 0.7, tension: 0.5, color: 0.7, time: 0.5 }),
+            createPatch('phy_pipe', 'Glass Pipe', 'Physical', '#86efac', { sourceType: 'physical', baseOctave: 5, vol: 0.6, tension: 0.15, color: 0.9, time: 0.7 })
+        ];
+        
+        const getSoundPatch = (id) => SOUND_LIBRARY.find(p => p.id === id);
+        const getRandomPatch = () => SOUND_LIBRARY[Math.floor(Math.random() * SOUND_LIBRARY.length)];
+        const getNextPatch = (currentId) => { const idx = SOUND_LIBRARY.findIndex(p => p.id === currentId); return idx === -1 ? SOUND_LIBRARY[0] : SOUND_LIBRARY[(idx + 1) % SOUND_LIBRARY.length]; };
+        const getPrevPatch = (currentId) => { const idx = SOUND_LIBRARY.findIndex(p => p.id === currentId); return idx === -1 ? SOUND_LIBRARY[SOUND_LIBRARY.length - 1] : SOUND_LIBRARY[(idx - 1 + SOUND_LIBRARY.length) % SOUND_LIBRARY.length]; };
+
+        // ==========================================
+        // 4. PRESETS
+        // ==========================================
+        const defaults = { vertexCount: 4, gravity: 0.2, friction: 0.001, restitution: 0.9, rotationSpeed: 0.005, ballCount: 3, ballSize: 6, initialSpeed: 5, flock: { enabled: false, boidCount: 0, perceptionRadius: 50, maxForce: 0.05, maxSpeed: 2, separationWeight: 1.5, alignmentWeight: 1.0, cohesionWeight: 1.0, color: '#ffffff', personality: 'free', euclideanHits: 4, euclideanSteps: 16 } };
+        const presets = [
+            { ...defaults, id: 1, name: "Gummy Bass", shapeType: 'triangle', vertexCount: 3, gravity: 0.6, restitution: 0.92, friction: 0.005, ballCount: 1, ballSize: 25, description: "Elastic sub-bass with impact compression.", themeColor: "#e11d48", instrument: { soundId: 'ana_bass' }, flock: { ...defaults.flock, euclideanHits: 3, euclideanSteps: 8 } },
+            { ...defaults, id: 2, name: "Neon Neuro", shapeType: 'hexagon', vertexCount: 6, gravity: 0.1, friction: 0.001, restitution: 0.98, ballCount: 4, ballSize: 8, rotationSpeed: 0.015, description: "Fast-moving neural sparks with spatial panning.", themeColor: "#06b6d4", instrument: { soundId: 'dig_bell' }, flock: { ...defaults.flock, euclideanHits: 5, euclideanSteps: 16 } },
+            { ...defaults, id: 3, name: "Wobble Pluck", shapeType: 'square', vertexCount: 4, gravity: 0.3, restitution: 0.9, rotationSpeed: 0.005, ballCount: 3, ballSize: 10, description: "Bouncy square waves with resonant zaps.", themeColor: "#f59e0b", instrument: { soundId: 'ana_lead' } },
+            { ...defaults, id: 4, name: "Crystal Rain", shapeType: 'octagon', vertexCount: 8, gravity: 0.6, ballCount: 5, ballSize: 4, restitution: 0.8, rotationSpeed: 0.002, description: "Tiny droplets. High pitched and clear.", themeColor: "#a855f7", instrument: { soundId: 'phy_pipe' } },
+            { ...defaults, id: 5, name: "Drone Cell", shapeType: 'star', vertexCount: 5, gravity: 0.00, ballCount: 6, ballSize: 6, initialSpeed: 3, rotationSpeed: 0.001, friction: 0.001, restitution: 0.9, description: "Slow moving, biological textures.", themeColor: "#8b5cf6", instrument: { soundId: 'atm_nebula' } },
+            { ...defaults, id: 6, name: "Glitch Swarm", shapeType: 'pentagon', vertexCount: 5, gravity: 0.0, friction: 0.005, restitution: 0.98, rotationSpeed: 0.05, ballCount: 8, ballSize: 3, initialSpeed: 12, description: "Chaotic, high-speed collision particles.", themeColor: "#6366f1", instrument: { soundId: 'dig_glitch' }, flock: { enabled: true, boidCount: 10, color: "#facc15", perceptionRadius: 60, maxSpeed: 8, maxForce: 0.5, separationWeight: 3.0, alignmentWeight: 1.0, cohesionWeight: 0.5, euclideanHits: 7, euclideanSteps: 12 } }
+        ];
+        
+        presets.forEach(p => {
+            const patch = getSoundPatch(p.instrument.soundId) || SOUND_LIBRARY[0];
+            p.instrument = { ...patch.config, soundId: patch.id };
+        });
+
+        // ==========================================
+        // 5. AUDIO ENGINE
+        // ==========================================
+        class AudioEngine {
+            constructor() {
+                this.ctx = null; this.masterGain = null; this.masterFilter = null; this.masterLimiter = null; this.safetyLimiter = null; this.analyser = null;
+                this.preAmpGain = null; this.sidechainBus = null;
+                this.lowBand = null; this.midBandHighPass = null; this.midBandLowPass = null; this.highBand = null;
+                this.lowComp = null; this.midComp = null; this.highComp = null; this.multibandMerge = null;
+                this.saturationNode = null; this.reverbNode = null; this.reverbMixGain = null; this.delayNode = null; this.delayFeedback = null; this.delayMixGain = null;
+                this.droneGain = null; this.droneOscs = []; this.noiseGain = null; this.noiseSource = null;
+                this.destNode = null; this.mediaRecorder = null; this.audioChunks = [];
+                this.fluxBusIn = null; this.fluxBusOut = null; this.fluxDry = null; this.tapeStopDelay = null; this.tapeStopFilter = null;
+                this.fractureDelay = null; this.fractureFeedback = null; this.fractureGain = null; this.fractureFilter = null;
+                this.voltageShaper = null; this.voltageGain = null; this.dimensionLeft = null; this.dimensionRight = null; this.dimensionGain = null;
+                this.prismOsc = null; this.prismGain = null; this.prismDry = null; this.prismLfo = null; this.prismLfoGain = null;
+                this.gravityDecimatorGain = null; this.gravityFilter = null;
+                this.gaterGain = null; this.gaterOsc = null; this.smearInput = null; this.smearOutput = null; this.smearFeedback = null; this.smearNodes = [];
+                this.diffuserConvolver = null; this.diffuserGain = null; this.mosaicFilter = null; this.mosaicGain = null; this.mosaicPanner = null;
+                this.noiseBuffer = null; this.reverbBuffer = null; this.diffuserBuffer = null; this.isInitialized = false; this.activeVoices = 0; this.MAX_POLYPHONY = 32;
+                this.waveShaperCurve = null; this.masterSpeed = 1.0; this.visualBrightness = 0.5; this.visualHue = 0; this.visualMotion = 0;
+                this.bpm = 120; this.beatCallbacks = [];
+                this.dummyBuffer = null;
+                this.fluxParams = {};
+                this.mosaicInterval = null;
+                this.currentRoot = 'C';
+            }
+
+            init() {
+                if (this.isInitialized) return;
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.generateNoiseBuffer();
+                this.generateReverbImpulse(3.5);
+                this.generateDiffuserImpulse();
+                this.generateFallbackBuffers();
+                this.waveShaperCurve = this.makeDistortionCurve(4);
+                this.destNode = this.ctx.createMediaStreamDestination();
+                this.analyser = this.ctx.createAnalyser();
+                this.analyser.fftSize = 512; this.analyser.smoothingTimeConstant = 0.7;
+
+                this.preAmpGain = this.ctx.createGain(); this.preAmpGain.gain.value = 1.0;
+                this.sidechainBus = this.ctx.createGain(); this.sidechainBus.gain.value = 1.0;
+                this.sidechainBus.connect(this.preAmpGain);
+
+                this.lowBand = this.ctx.createBiquadFilter(); this.lowBand.type = 'lowpass'; this.lowBand.frequency.value = 250; this.lowBand.Q.value = 0.7;
+                this.midBandHighPass = this.ctx.createBiquadFilter(); this.midBandHighPass.type = 'highpass'; this.midBandHighPass.frequency.value = 250; this.midBandHighPass.Q.value = 0.7;
+                this.midBandLowPass = this.ctx.createBiquadFilter(); this.midBandLowPass.type = 'lowpass'; this.midBandLowPass.frequency.value = 4000; this.midBandLowPass.Q.value = 0.7;
+                this.highBand = this.ctx.createBiquadFilter(); this.highBand.type = 'highpass'; this.highBand.frequency.value = 4000; this.highBand.Q.value = 0.7;
+
+                const lowGain = this.ctx.createGain(); lowGain.gain.value = 1.0;
+                const midGain = this.ctx.createGain(); midGain.gain.value = 1.0;
+
+                this.lowComp = this.ctx.createDynamicsCompressor(); this.lowComp.threshold.value = -12; this.lowComp.ratio.value = 3.0; this.lowComp.attack.value = 0.03; this.lowComp.release.value = 0.25;
+                this.midComp = this.ctx.createDynamicsCompressor(); this.midComp.threshold.value = -12; this.midComp.ratio.value = 2.0; this.midComp.attack.value = 0.01;
+                this.highComp = this.ctx.createDynamicsCompressor(); this.highComp.threshold.value = -12; this.highComp.ratio.value = 1.5; this.highComp.attack.value = 0.005;
+
+                this.multibandMerge = this.ctx.createGain();
+                this.preAmpGain.connect(this.lowBand); this.lowBand.connect(lowGain); lowGain.connect(this.lowComp); this.lowComp.connect(this.multibandMerge);
+                this.preAmpGain.connect(this.midBandHighPass); this.midBandHighPass.connect(this.midBandLowPass); this.midBandLowPass.connect(midGain); midGain.connect(this.midComp); this.midComp.connect(this.multibandMerge);
+                this.preAmpGain.connect(this.highBand); this.highBand.connect(this.highComp); this.highComp.connect(this.multibandMerge);
+
+                this.saturationNode = this.ctx.createWaveShaper(); this.saturationNode.curve = this.makeDistortionCurve(0.2);
+                this.masterGain = this.ctx.createGain(); this.masterGain.gain.value = 0.4;
+                this.masterFilter = this.ctx.createBiquadFilter(); this.masterFilter.type = 'lowpass'; this.masterFilter.frequency.value = 22000;
+                this.masterLimiter = this.ctx.createDynamicsCompressor(); this.masterLimiter.threshold.value = -3.0; this.masterLimiter.ratio.value = 12; this.masterLimiter.attack.value = 0.003; this.masterLimiter.release.value = 0.1;
+                this.safetyLimiter = this.ctx.createWaveShaper(); this.safetyLimiter.curve = this.makeSoftClipCurve(1.0);
+
+                this.initFluxRig();
+
+                this.multibandMerge.connect(this.saturationNode); this.saturationNode.connect(this.masterFilter);
+                this.masterFilter.connect(this.fluxBusIn); this.fluxBusOut.connect(this.masterGain);
+                this.masterGain.connect(this.masterLimiter); this.masterLimiter.connect(this.analyser);
+                this.analyser.connect(this.safetyLimiter); this.safetyLimiter.connect(this.ctx.destination); this.safetyLimiter.connect(this.destNode);
+
+                const fxBus = this.ctx.createGain(); this.preAmpGain.connect(fxBus);
+                this.reverbNode = this.ctx.createConvolver(); if(this.reverbBuffer) this.reverbNode.buffer = this.reverbBuffer;
+                this.reverbMixGain = this.ctx.createGain(); this.reverbMixGain.gain.value = 0.3;
+                this.reverbNode.connect(this.reverbMixGain); this.reverbMixGain.connect(fxBus);
+
+                this.delayNode = this.ctx.createDelay(); this.delayNode.delayTime.value = 0.375;
+                this.delayFeedback = this.ctx.createGain(); this.delayFeedback.gain.value = 0.4;
+                this.delayMixGain = this.ctx.createGain(); this.delayMixGain.gain.value = 0.3;
+                const delayFilter = this.ctx.createBiquadFilter(); delayFilter.type = 'lowpass'; delayFilter.frequency.value = 2000;
+                const delayHighpass = this.ctx.createBiquadFilter(); delayHighpass.type = 'highpass'; delayHighpass.frequency.value = 200;
+                this.delayNode.connect(this.delayFeedback); this.delayFeedback.connect(delayFilter); delayFilter.connect(delayHighpass); delayHighpass.connect(this.delayNode);
+                this.delayNode.connect(this.delayMixGain); this.delayMixGain.connect(fxBus);
+
+                this.initEnvironmentNoise();
+                this.initDrone();
+                
+                this.isInitialized = true;
+                this.setBPM(120);
+                this.startInternalLoop();
+            }
+
+            initDrone() {
+                if (!this.ctx) return;
+                this.droneGain = this.ctx.createGain();
+                this.droneGain.gain.value = 0.0;
+                
+                // Warm Lowpass Filter for Drone
+                const droneFilter = this.ctx.createBiquadFilter();
+                droneFilter.type = 'lowpass';
+                droneFilter.frequency.value = 600; 
+                this.droneGain.connect(droneFilter);
+                droneFilter.connect(this.sidechainBus);
+                droneFilter.connect(this.reverbNode);
+
+                // 3 Oscillators for thick texture
+                const configs = [
+                    { type: 'sawtooth', ratio: 0.5, gain: 0.4 }, // Sub
+                    { type: 'triangle', ratio: 1.0, gain: 0.3 }, // Fundamental
+                    { type: 'sine', ratio: 1.5, gain: 0.2 }      // Fifth
+                ];
+
+                configs.forEach(c => {
+                    const osc = this.ctx.createOscillator();
+                    osc.type = c.type;
+                    const g = this.ctx.createGain();
+                    g.gain.value = c.gain;
+                    osc.connect(g);
+                    g.connect(this.droneGain);
+                    osc.start();
+                    this.droneOscs.push({ osc, gain: g, ratio: c.ratio });
+                });
+                this.setGlobalKey('C');
+            }
+
+            setGlobalKey(root) {
+                this.currentRoot = root;
+                if (!this.ctx || this.droneOscs.length === 0) return;
+                
+                const rootIdx = NOTES.indexOf(root);
+                const baseFreq = 440 * Math.pow(2, (rootIdx - 9 - 24) / 12); // Low octave
+
+                const t = this.ctx.currentTime;
+                this.droneOscs.forEach(d => {
+                    d.osc.frequency.setTargetAtTime(baseFreq * d.ratio, t, 0.1);
+                });
+            }
+
+            startInternalLoop() {
+                if (this.mosaicInterval) clearInterval(this.mosaicInterval);
+                this.mosaicInterval = setInterval(() => {
+                    if (this.fluxParams.mosaic && this.mosaicFilter && this.mosaicPanner && this.ctx) {
+                        const t = this.ctx.currentTime;
+                        const freq = 200 + Math.random() * 6000;
+                        this.mosaicFilter.frequency.setTargetAtTime(freq, t, 0.02);
+                        this.mosaicPanner.pan.setTargetAtTime(Math.random() * 2 - 1, t, 0.02);
+                    }
+                }, 100);
+            }
+
+            generateFallbackBuffers() {
+                const padBuffer = this.createBuffer(4.0, (data, i, rate) => {
+                    const t = i / rate;
+                    let s = 0; s += (Math.abs((t * 220 % 1) * 2 - 1) - 0.5) * 0.5; s += (Math.abs((t * 221 % 1) * 2 - 1) - 0.5) * 0.3;
+                    return s * Math.exp(-t * 0.5);
+                });
+                const glitchBuffer = this.createBuffer(2.0, (data, i, rate) => {
+                    if (Math.random() > 0.95) return Math.random() * 2 - 1;
+                    if (i % 1000 < 50) return Math.random() * 0.5;
+                    return 0;
+                });
+                SOUND_LIBRARY.forEach(patch => {
+                    if (patch.config.sourceType === 'granular' || patch.config.sourceType === 'sampler') {
+                        patch.config.sampleBuffer = (patch.category === 'Glitch' || patch.category === 'Percussion') ? glitchBuffer : padBuffer;
+                    }
+                });
+            }
+
+            createBuffer(duration, generator) {
+                const len = this.ctx.sampleRate * duration;
+                const buffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < len; i++) data[i] = generator(data, i, this.ctx.sampleRate);
+                return buffer;
+            }
+
+            initFluxRig() {
+                if(!this.ctx) return;
+                this.fluxBusIn = this.ctx.createGain(); this.fluxBusOut = this.ctx.createGain(); this.fluxDry = this.ctx.createGain(); this.fluxDry.gain.value = 1.0;
+                
+                this.tapeStopDelay = this.ctx.createDelay(2.0); 
+                this.tapeStopFilter = this.ctx.createBiquadFilter(); 
+                this.tapeStopFilter.type = 'lowpass'; 
+                this.tapeStopFilter.frequency.value = 22000;
+                
+                this.fractureDelay = this.ctx.createDelay(1.0); this.fractureDelay.delayTime.value = 0.1;
+                this.fractureFeedback = this.ctx.createGain(); this.fractureFeedback.gain.value = 0;
+                this.fractureFilter = this.ctx.createBiquadFilter(); this.fractureFilter.type = 'lowpass'; this.fractureFilter.frequency.value = 3000;
+                this.fractureGain = this.ctx.createGain(); this.fractureGain.gain.value = 0;
+                this.fractureDelay.connect(this.fractureFeedback); this.fractureFeedback.connect(this.fractureFilter); this.fractureFilter.connect(this.fractureDelay);
+                
+                this.voltageShaper = this.ctx.createWaveShaper(); this.voltageShaper.curve = this.makeDistortionCurve(5);
+                this.voltageGain = this.ctx.createGain(); this.voltageGain.gain.value = 0;
+                
+                this.dimensionLeft = this.ctx.createDelay(); this.dimensionRight = this.ctx.createDelay();
+                this.dimensionLeft.delayTime.value = 0.01; this.dimensionRight.delayTime.value = 0.02;
+                this.dimensionGain = this.ctx.createGain(); this.dimensionGain.gain.value = 0;
+                
+                this.prismOsc = this.ctx.createOscillator(); this.prismOsc.type = 'square';
+                this.prismOsc.frequency.value = 100; this.prismOsc.start();
+                this.prismLfo = this.ctx.createOscillator(); this.prismLfo.frequency.value = 2; this.prismLfo.type = 'sine'; this.prismLfo.start();
+                this.prismLfoGain = this.ctx.createGain(); this.prismLfoGain.gain.value = 500;
+                this.prismLfo.connect(this.prismLfoGain); this.prismLfoGain.connect(this.prismOsc.frequency);
+                this.prismGain = this.ctx.createGain(); this.prismGain.gain.value = 0; this.prismDry = this.ctx.createGain(); this.prismDry.gain.value = 1;
+                const prismModAmp = this.ctx.createGain(); prismModAmp.gain.value = 0; this.prismOsc.connect(prismModAmp);
+                
+                this.gravityFilter = this.ctx.createBiquadFilter(); this.gravityFilter.type = 'lowpass'; this.gravityFilter.frequency.value = 22000;
+                this.gravityDecimatorGain = this.ctx.createGain(); this.gravityDecimatorGain.gain.value = 1.0;
+                
+                this.gaterGain = this.ctx.createGain(); this.gaterGain.gain.value = 1.0;
+                
+                this.smearInput = this.ctx.createGain(); this.smearOutput = this.ctx.createGain(); this.smearOutput.gain.value = 0;
+                this.smearFeedback = this.ctx.createGain(); this.smearFeedback.gain.value = 0.7;
+                const smearDelay = this.ctx.createDelay(); smearDelay.delayTime.value = 0.02;
+                let lastNode = this.smearInput;
+                const freqs = [220, 440, 880, 1500, 2500, 4000];
+                for(let i=0; i<6; i++) { const ap = this.ctx.createBiquadFilter(); ap.type = 'allpass'; ap.frequency.value = freqs[i]; ap.Q.value = 2.0; lastNode.connect(ap); lastNode = ap; this.smearNodes.push(ap); }
+                lastNode.connect(smearDelay); smearDelay.connect(this.smearFeedback); this.smearFeedback.connect(this.smearNodes[0]); lastNode.connect(this.smearOutput);
+                
+                this.diffuserConvolver = this.ctx.createConvolver();
+                if (this.diffuserBuffer) this.diffuserConvolver.buffer = this.diffuserBuffer;
+                this.diffuserGain = this.ctx.createGain(); this.diffuserGain.gain.value = 0;
+
+                this.mosaicFilter = this.ctx.createBiquadFilter(); this.mosaicFilter.type = 'bandpass'; this.mosaicFilter.Q.value = 15;
+                this.mosaicGain = this.ctx.createGain(); this.mosaicGain.gain.value = 0;
+                this.mosaicPanner = this.ctx.createStereoPanner();
+                
+                this.fluxBusIn.connect(this.tapeStopDelay); this.tapeStopDelay.connect(this.tapeStopFilter); this.tapeStopFilter.connect(this.gravityFilter);
+                this.gravityFilter.connect(this.gravityDecimatorGain);
+                const chainOut = this.gravityDecimatorGain;
+                
+                chainOut.connect(this.fluxDry); this.fluxDry.connect(this.gaterGain);
+                chainOut.connect(this.fractureDelay); this.fractureDelay.connect(this.fractureGain); this.fractureGain.connect(this.gaterGain);
+                chainOut.connect(this.voltageShaper); this.voltageShaper.connect(this.voltageGain); this.voltageGain.connect(this.gaterGain);
+                chainOut.connect(this.dimensionLeft); this.dimensionLeft.connect(this.dimensionGain); chainOut.connect(this.dimensionRight); this.dimensionRight.connect(this.dimensionGain); this.dimensionGain.connect(this.gaterGain);
+                chainOut.connect(this.prismDry); this.prismDry.connect(this.gaterGain); chainOut.connect(prismModAmp); prismModAmp.connect(this.prismGain); this.prismGain.connect(this.gaterGain);
+                chainOut.connect(this.smearInput); this.smearOutput.connect(this.gaterGain);
+                
+                chainOut.connect(this.diffuserConvolver); this.diffuserConvolver.connect(this.diffuserGain); this.diffuserGain.connect(this.gaterGain);
+                chainOut.connect(this.mosaicFilter); this.mosaicFilter.connect(this.mosaicPanner); this.mosaicPanner.connect(this.mosaicGain); this.mosaicGain.connect(this.gaterGain);
+
+                this.gaterGain.connect(this.fluxBusOut);
+            }
+            
+            generateNoiseBuffer() {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 2.0;
+                this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = this.noiseBuffer.getChannelData(0);
+                let lastOut = 0;
+                for (let i = 0; i < bufferSize; i++) { const white = Math.random() * 2 - 1; data[i] = (lastOut + (0.02 * white)) / 1.02; lastOut = data[i]; data[i] *= 0.5; }
+            }
+
+            generateReverbImpulse(duration) {
+                if (!this.ctx) return;
+                const length = this.ctx.sampleRate * duration;
+                this.reverbBuffer = this.ctx.createBuffer(2, length, this.ctx.sampleRate);
+                const left = this.reverbBuffer.getChannelData(0); const right = this.reverbBuffer.getChannelData(1);
+                for (let i = 0; i < length; i++) { const decay = Math.pow(1 - i / length, 4.0); left[i] = (Math.random() * 2 - 1) * decay; right[i] = (Math.random() * 2 - 1) * decay; }
+            }
+
+            generateDiffuserImpulse() {
+                if (!this.ctx) return;
+                const length = this.ctx.sampleRate * 1.5;
+                this.diffuserBuffer = this.ctx.createBuffer(2, length, this.ctx.sampleRate);
+                for(let c=0; c<2; c++) {
+                    const data = this.diffuserBuffer.getChannelData(c);
+                    for(let i=0; i<length; i++) {
+                        if (i % 300 < 5) data[i] = (Math.random()*2-1) * Math.pow(1-i/length, 1.5);
+                        else data[i] = 0;
+                    }
+                }
+            }
+
+            makeDistortionCurve(amount) {
+                const k = Math.min(100, Math.max(0, amount)); const n = 44100; const curve = new Float32Array(n);
+                for (let i = 0; i < n; ++i) { const x = (i * 2) / n - 1; curve[i] = (Math.atan(k * x) / Math.atan(k)); }
+                return curve;
+            }
+
+            makeSoftClipCurve(amount) {
+                const n = 44100; const curve = new Float32Array(n);
+                for (let i = 0; i < n; i++) { const x = (i * 2) / n - 1; curve[i] = Math.tanh(x); }
+                return curve;
+            }
+
+            initEnvironmentNoise() {
+                if (!this.ctx || !this.sidechainBus) return;
+                try {
+                    const bufferSize = this.ctx.sampleRate * 2;
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    this.noiseSource = this.ctx.createBufferSource(); this.noiseSource.buffer = buffer; this.noiseSource.loop = true;
+                    this.noiseGain = this.ctx.createGain(); this.noiseGain.gain.value = 0.0;
+                    const noiseFilter = this.ctx.createBiquadFilter(); noiseFilter.type = 'bandpass'; noiseFilter.frequency.value = 800; noiseFilter.Q.value = 0.5;
+                    this.noiseSource.connect(noiseFilter); noiseFilter.connect(this.noiseGain); this.noiseGain.connect(this.sidechainBus);
+                    this.noiseSource.start(0);
+                } catch (e) {}
+            }
+
+            setFluxParams(params) {
+                if (!this.ctx || !this.fluxBusIn) return;
+                this.fluxParams = params;
+                const t = this.ctx.currentTime;
+                
+                let speed = 1.0;
+                let filterF = 22000;
+                let delayT = 0;
+
+                if (params.tapeVal < 0.45) {
+                    speed = 1.0 + (0.5 - params.tapeVal) * 2.0;
+                    filterF = 22000;
+                } else if (params.tapeVal > 0.55) {
+                    const slowFactor = (params.tapeVal - 0.5) * 2;
+                    speed = Math.max(0.01, 1.0 - slowFactor);
+                    filterF = 22000 * Math.pow(0.05, slowFactor);
+                    delayT = slowFactor * 0.1;
+                }
+
+                this.masterSpeed = speed;
+                this.tapeStopFilter.frequency.setTargetAtTime(Math.max(20, filterF), t, 0.2);
+                this.tapeStopDelay.delayTime.setTargetAtTime(delayT, t, 0.3);
+
+                if (params.gravityEnabled && params.gravityX !== undefined && params.gravityY !== undefined && this.gravityFilter) {
+                    const open = 1 - params.gravityY;
+                    const freq = 50 * Math.pow(2, open * 10);
+                    this.gravityFilter.frequency.setTargetAtTime(Math.min(22000, freq), t, 0.1);
+                    this.gravityFilter.Q.value = Math.min(8, 2 + (params.gravityX * 5));
+                } else {
+                    this.gravityFilter.frequency.setTargetAtTime(22000, t, 0.2);
+                    this.gravityFilter.Q.value = 1;
+                }
+
+                this.fractureGain.gain.setTargetAtTime(params.fracture ? 1 : 0, t, 0.05);
+                this.fractureFeedback.gain.setTargetAtTime(params.fracture ? 0.8 : 0, t, 0.05);
+                this.voltageGain.gain.setTargetAtTime(params.voltage ? 0.5 : 0, t, 0.05);
+                this.dimensionGain.gain.setTargetAtTime(params.dimension ? 1 : 0, t, 0.05);
+                this.smearOutput.gain.setTargetAtTime(params.smear ? 1.0 : 0, t, 0.1);
+                
+                const ringFreq = 100 + (params.prismVal * 4000); 
+                this.prismOsc.frequency.setTargetAtTime(ringFreq, t, 0.1);
+                const isPrism = params.prismVal > 0.05;
+                this.prismGain.gain.setTargetAtTime(isPrism ? 1.5 : 0, t, 0.05);
+                this.prismLfo.frequency.value = 2 + params.prismVal * 20; 
+
+                this.diffuserGain.gain.setTargetAtTime(params.diffuser ? 1.5 : 0, t, 0.1);
+                this.mosaicGain.gain.setTargetAtTime(params.mosaic ? 1.2 : 0, t, 0.05);
+
+                let dryLevel = 1.0;
+                if (params.smear) dryLevel = 0.2;
+                if (params.diffuser) dryLevel = 0.4;
+                if (params.mosaic) dryLevel = 0.0;
+                if (isPrism) dryLevel = 0.0;
+                
+                this.fluxDry.gain.setTargetAtTime(dryLevel, t, 0.1);
+
+                if (params.gater && !this.gaterOsc) {
+                    this.gaterOsc = this.ctx.createOscillator(); this.gaterOsc.type = 'square'; this.gaterOsc.frequency.value = (this.bpm / 60) * 4;
+                    const gaterAmp = this.ctx.createGain(); gaterAmp.gain.value = 1.0;
+                    this.gaterOsc.connect(gaterAmp); gaterAmp.connect(this.gaterGain.gain); this.gaterOsc.start();
+                } else if (!params.gater && this.gaterOsc) {
+                    try { this.gaterOsc.stop(); this.gaterOsc.disconnect(); } catch(e){}
+                    this.gaterOsc = null; this.gaterGain.gain.setTargetAtTime(1.0, t, 0.1);
+                }
+            }
+
+            trigger(config, freq, velocity, pan) {
+                if (!this.ctx || !this.preAmpGain) return;
+                if (this.activeVoices >= this.MAX_POLYPHONY) return;
+                if (!Number.isFinite(freq) || freq < 20) return;
+                let modFreq = freq * this.masterSpeed;
+                const hue = this.visualHue;
+                if (hue > 160 && hue < 260 && Math.random() > 0.7) modFreq *= 1.5;
+                else if ((hue > 280 || hue < 20) && Math.random() > 0.8) modFreq *= 2.0;
+                else if (hue > 20 && hue < 60 && Math.random() > 0.8) modFreq *= 0.5;
+
+                if (config.sourceType === 'granular') this.triggerGranular(config, modFreq, velocity, pan);
+                else if (config.sourceType === 'physical') this.triggerPhysical(config, modFreq, velocity, pan);
+                else if (config.sourceType === 'sampler') this.triggerSample(config, modFreq, velocity, pan);
+                else if (config.sourceType === 'formant') this.triggerFormant(config, modFreq, velocity, pan);
+                else this.triggerSynth(config, modFreq, velocity, pan);
+            }
+
+            triggerSynth(config, frequency, velocity, spatialPos) {
+                this.activeVoices++;
+                const t = this.ctx.currentTime;
+                const motionTimbreMod = this.visualMotion * 0.5;
+                const timbre = Math.min(1.0, (config.timbre ?? 0.5) + motionTimbreMod);
+                const drive = config.drive || 0; const color = config.color ?? 0.5;
+                const oscMain = this.ctx.createOscillator(); oscMain.type = config.waveform || 'sawtooth'; oscMain.frequency.setValueAtTime(frequency, t);
+                const oscSub = this.ctx.createOscillator(); oscSub.type = config.waveform === 'sine' ? 'sine' : 'square'; oscSub.frequency.setValueAtTime(frequency/2, t);
+                
+                let fmOsc = null; let fmGain = null;
+                const fmDepth = Math.min(800, frequency * (this.visualMotion + timbre));
+                if (fmDepth > 10) { fmOsc = this.ctx.createOscillator(); fmOsc.frequency.value = frequency * (2 + timbre); fmGain = this.ctx.createGain(); fmGain.gain.value = fmDepth; fmOsc.connect(fmGain); fmGain.connect(oscMain.frequency); fmOsc.start(t); }
+
+                const gain = this.ctx.createGain();
+                const panner = this.ctx.createStereoPanner(); panner.pan.value = spatialPos.x;
+                const filter = this.ctx.createBiquadFilter(); filter.type = config.filterType || 'lowpass';
+                
+                let targetFreq = 1000;
+                if(filter.type === 'lowpass') targetFreq = Math.exp(Math.log(100) + color * (Math.log(15000) - Math.log(100)));
+                else if(filter.type === 'highpass') targetFreq = Math.exp(Math.log(50) + (1-color) * (Math.log(4000) - Math.log(50)));
+                else targetFreq = (config.filterFreq||1000) * Math.pow(4, (color-0.5)*2);
+                
+                filter.frequency.setValueAtTime(targetFreq, t); filter.Q.value = Math.min(8, (config.filterQ||1) + color * 5);
+
+                oscMain.connect(filter); oscSub.connect(filter);
+                if (drive > 0) {
+                    const shaper = this.ctx.createWaveShaper(); shaper.curve = this.waveShaperCurve;
+                    const pre = this.ctx.createGain(); pre.gain.value = 1 + drive * 1.5;
+                    const post = this.ctx.createGain(); post.gain.value = 1 / (1 + drive);
+                    filter.connect(pre); pre.connect(shaper); shaper.connect(post); post.connect(gain);
+                } else filter.connect(gain);
+                
+                gain.connect(panner); panner.connect(config.sidechainTarget ? this.sidechainBus : this.preAmpGain);
+                const stopTime = t + config.attack + config.decay + config.release * (0.8 + (config.time??0.5)*1.5);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(config.vol * velocity * 0.15, t + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.001, stopTime);
+                
+                this.connectFX(gain, 0.2 * (0.5+(config.time??0.5)), 0.3 * (0.5+(config.time??0.5)));
+                oscMain.start(t); oscSub.start(t); oscMain.stop(stopTime+0.1); oscSub.stop(stopTime+0.1);
+                if(fmOsc) fmOsc.stop(stopTime+0.1);
+                oscMain.onended = () => { try { oscMain.disconnect(); oscSub.disconnect(); filter.disconnect(); gain.disconnect(); panner.disconnect(); if(fmOsc) { fmOsc.disconnect(); fmGain.disconnect(); } } catch(e){} this.activeVoices--; };
+            }
+
+            triggerPhysical(config, frequency, velocity, spatialPos) {
+                if(!this.noiseBuffer) return;
+                this.activeVoices++;
+                const t = this.ctx.currentTime;
+                const freq = Math.max(50, Math.min(1200, frequency));
+                const period = 1/freq;
+                const source = this.ctx.createBufferSource(); source.buffer = this.noiseBuffer; source.loop = true;
+                const exciter = this.ctx.createGain(); exciter.gain.setValueAtTime(0, t); 
+                exciter.gain.linearRampToValueAtTime(velocity*0.15, t+0.001); 
+                exciter.gain.exponentialRampToValueAtTime(0.001, t+0.05);
+                const delay = this.ctx.createDelay(1); delay.delayTime.value = period;
+                const feedback = this.ctx.createGain(); feedback.gain.value = Math.min(0.99, (config.tension||0.5));
+                const filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setTargetAtTime(500 + (config.color||0.5)*7500, t, 0.01);
+                source.connect(exciter); exciter.connect(delay); delay.connect(filter); filter.connect(feedback); feedback.connect(delay);
+                const out = this.ctx.createGain(); delay.connect(out);
+                const panner = this.ctx.createStereoPanner(); panner.pan.value = spatialPos.x;
+                out.connect(panner); panner.connect(config.sidechainTarget ? this.sidechainBus : this.preAmpGain);
+                this.connectFX(out, 0.4, 0.2);
+                source.start(t); source.stop(t + 0.5 + (config.tension||0.5)*4);
+                setTimeout(() => { try { source.disconnect(); exciter.disconnect(); delay.disconnect(); filter.disconnect(); out.disconnect(); panner.disconnect(); } catch(e){} this.activeVoices--; }, (0.5+(config.tension||0.5)*4)*1000+200);
+            }
+
+            triggerSample(config, frequency, velocity, spatialPos) {
+                this.activeVoices++;
+                const t = this.ctx.currentTime;
+                const source = this.ctx.createBufferSource();
+                source.buffer = config.sampleBuffer;
+                if (!source.buffer) return; 
+                
+                source.playbackRate.value = (frequency / 261.63) * this.masterSpeed;
+                const gain = this.ctx.createGain();
+                const panner = this.ctx.createStereoPanner(); panner.pan.value = spatialPos.x;
+                const duration = source.buffer.duration / source.playbackRate.value;
+                const release = config.release * (0.5 + (config.time??0.5));
+                
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(config.vol * velocity * 0.15, t + 0.005);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + duration + release + 0.5);
+                
+                source.connect(gain); gain.connect(panner); panner.connect(config.sidechainTarget ? this.sidechainBus : this.preAmpGain);
+                this.connectFX(gain, 0.15 + (config.time??0.5)*0.2, 0.15 + (config.time??0.5)*0.2);
+                source.start(t); source.stop(t + duration + release + 0.5);
+                source.onended = () => { try { source.disconnect(); gain.disconnect(); panner.disconnect(); } catch(e){} this.activeVoices--; };
+            }
+            
+            triggerGranular(config, frequency, velocity, spatialPos) {
+                 this.triggerSample(config, frequency, velocity, spatialPos);
+            }
+
+            triggerFormant(config, frequency, velocity, spatialPos) {
+                this.activeVoices++;
+                const t = this.ctx.currentTime;
+                const source = this.ctx.createOscillator(); source.type = 'sawtooth'; source.frequency.setValueAtTime(frequency, t);
+                const idx = Math.floor((config.color||0.5) * 4);
+                const v = Object.values(VOWELS)[idx];
+                const filters = v.map(f => { const fl = this.ctx.createBiquadFilter(); fl.type='bandpass'; fl.frequency.value = f; fl.Q.value = 5; source.connect(fl); return fl; });
+                const gain = this.ctx.createGain(); filters.forEach(f => f.connect(gain));
+                const panner = this.ctx.createStereoPanner(); panner.pan.value = spatialPos.x;
+                gain.connect(panner); panner.connect(config.sidechainTarget ? this.sidechainBus : this.preAmpGain);
+                const stopTime = t + config.attack + config.decay + config.release;
+                gain.gain.setValueAtTime(0, t); 
+                gain.gain.linearRampToValueAtTime(config.vol * velocity * 0.15, t + config.attack); 
+                gain.gain.exponentialRampToValueAtTime(0.001, stopTime);
+                source.start(t); source.stop(stopTime+0.1);
+                source.onended = () => { try { source.disconnect(); gain.disconnect(); panner.disconnect(); filters.forEach(f=>f.disconnect()); } catch(e){} this.activeVoices--; };
+            }
+
+            triggerStrum(config, freq, vel, pan) { this.trigger({...config, attack:0.005, decay:0.1, sustain:0, release:0.2, tension:0.2}, freq, vel, pan); }
+            
+            triggerDrum(type, velocity, pan) {
+                if (!this.ctx) return;
+                if (type === 'glitch' && this.activeVoices < this.MAX_POLYPHONY) {
+                    const t = this.ctx.currentTime;
+                    const gain = this.ctx.createGain();
+                    const panner = this.ctx.createStereoPanner(); panner.pan.value = pan;
+                    gain.connect(panner); panner.connect(this.preAmpGain);
+                    
+                    const bufferSize = this.ctx.sampleRate * 0.05;
+                    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for(let i=0; i<bufferSize; i++) data[i] = Math.random()*2-1;
+                    const noise = this.ctx.createBufferSource(); noise.buffer = buffer;
+                    const filter = this.ctx.createBiquadFilter(); filter.type = 'highpass'; filter.frequency.value = 6000;
+                    gain.gain.setValueAtTime(0.15*velocity, t); 
+                    gain.gain.exponentialRampToValueAtTime(0.001, t+0.05);
+                    noise.connect(filter); filter.connect(gain);
+                    noise.start(t); noise.stop(t+0.05);
+                }
+            }
+
+            connectFX(src, rev, del) {
+                if(!this.reverbNode) return;
+                const r = this.ctx.createGain(); r.gain.value = rev; src.connect(r); r.connect(this.reverbNode);
+                const d = this.ctx.createGain(); d.gain.value = del; src.connect(d); d.connect(this.delayNode);
+            }
+            resume() { if(this.ctx?.state === 'suspended') this.ctx.resume(); }
+            updateVisualModulation(m, b, h) { this.visualMotion = m; this.visualBrightness = b; this.visualHue = h; }
+            getAverageVolume() { if(!this.analyser) return 0; const a = new Uint8Array(this.analyser.frequencyBinCount); this.analyser.getByteFrequencyData(a); return a.reduce((a,b)=>a+b,0)/a.length; }
+            setBPM(bpm) { this.bpm = bpm; if(this.delayNode) this.delayNode.delayTime.setTargetAtTime(60/bpm*0.75, this.ctx.currentTime, 0.2); }
+            updateEnvironment(d, n, r, s) { if(this.droneGain) this.droneGain.gain.setTargetAtTime(d*0.6, this.ctx.currentTime, 0.5); if(this.noiseGain) this.noiseGain.gain.setTargetAtTime(n*0.05, this.ctx.currentTime, 0.5); }
+            setGlobalFilter(v) { if(this.masterFilter) this.masterFilter.frequency.setTargetAtTime(Math.max(20, Math.exp(Math.log(40) + v * (Math.log(20000)-Math.log(40)))), this.ctx.currentTime, 0.1); }
+            setGlobalDelayFeedback(v) { if(this.delayFeedback) this.delayFeedback.gain.setTargetAtTime(v*0.8, this.ctx.currentTime, 0.1); }
+            async decodeAudioData(b) { if(!this.ctx) this.init(); return await this.ctx.decodeAudioData(b); }
+            subscribeBeat(cb) { this.beatCallbacks.push(cb); }
+            startRecording() { if(!this.destNode) return; this.audioChunks = []; this.mediaRecorder = new MediaRecorder(this.destNode.stream); this.mediaRecorder.ondataavailable = e => this.audioChunks.push(e.data); this.mediaRecorder.start(); }
+            async stopRecording() { return new Promise(r => { this.mediaRecorder.onstop = () => r(new Blob(this.audioChunks, {type:'audio/wav'})); this.mediaRecorder.stop(); }); }
+        }
+        const audio = new AudioEngine();
+
+        // ==========================================
+        // 6. COMPONENTS
+        // ==========================================
+        
+        const PatchPicker = ({ currentId, onSelect, onClose }) => {
+            const categories = Array.from(new Set(SOUND_LIBRARY.map(p => p.category)));
+            return (
+                <div className="absolute inset-0 bg-[#09090b]/95 z-50 flex flex-col animate-in fade-in duration-200 backdrop-blur-sm">
+                    <div className="flex items-center justify-between p-2 border-b border-[#27272a] bg-[#121215]">
+                        <span className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase">Select Patch</span>
+                        <button onClick={onClose} className="text-zinc-500 hover:text-white"><X size={14} /></button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+                        {categories.map(cat => (
+                            <div key={cat} className="mb-4">
+                                <div className="text-[9px] font-bold text-[#ea580c] tracking-widest mb-1 uppercase border-b border-[#27272a] pb-1">{cat}</div>
+                                <div className="grid grid-cols-2 gap-1">
+                                    {SOUND_LIBRARY.filter(p => p.category === cat).map(patch => (
+                                        <button key={patch.id} onClick={() => onSelect(patch)} className={`text-left px-2 py-1.5 text-[9px] font-mono border transition-colors ${currentId === patch.id ? 'bg-zinc-800 text-white border-zinc-600' : 'bg-[#18181b] text-zinc-500 border-transparent hover:border-zinc-700 hover:text-zinc-300'}`}>
+                                            {patch.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const MasterVisualizer = () => {
+            const canvasRef = useRef(null); const requestRef = useRef(null);
+            const draw = () => {
+                const canvas = canvasRef.current; const analyser = audio.analyser;
+                if (!canvas || !analyser) { requestRef.current = requestAnimationFrame(draw); return; }
+                const ctx = canvas.getContext('2d'); const w = canvas.width; const h = canvas.height;
+                const bufferLength = analyser.frequencyBinCount; const dataArray = new Uint8Array(bufferLength);
+                analyser.getByteTimeDomainData(dataArray);
+                ctx.fillStyle = '#09090b'; ctx.fillRect(0, 0, w, h);
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.beginPath(); for(let x=0; x<w; x+=20) { ctx.moveTo(x,0); ctx.lineTo(x,h); } ctx.stroke();
+                ctx.lineWidth = 2; ctx.strokeStyle = '#84cc16'; ctx.beginPath();
+                const sliceWidth = w * 1.0 / bufferLength; let x = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0; const y = (v * h) / 2;
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); x += sliceWidth;
+                }
+                ctx.lineTo(w, h / 2); ctx.stroke();
+                requestRef.current = requestAnimationFrame(draw);
+            };
+            useEffect(() => { requestRef.current = requestAnimationFrame(draw); return () => cancelAnimationFrame(requestRef.current); }, []);
+            return ( <div className="h-10 w-48 bg-[#09090b] border border-[#27272a] relative overflow-hidden hidden md:block"> <div className="absolute inset-0 scanline-overlay z-20 pointer-events-none"></div> <canvas ref={canvasRef} width={192} height={40} className="w-full h-full opacity-80" /> </div> );
+        };
+
+        const VisualModulator = () => {
+            const canvasRef = useRef(null); const videoRef = useRef(null); const imgRef = useRef(null); const [sourceType, setSourceType] = useState('placeholder'); const [activeUrl, setActiveUrl] = useState(''); const [isVideoMode, setIsVideoMode] = useState(true); const [isEnabled, setIsEnabled] = useState(true); const fileInputRef = useRef(null); const requestRef = useRef(null); const prevFrameRef = useRef(null);
+            
+            const PLACEHOLDER_SOURCES = [ "https://upload.wikimedia.org/wikipedia/commons/c/c0/Big_Buck_Bunny_4K.webm", "https://upload.wikimedia.org/wikipedia/commons/2/2c/Rotating_earth_%28large%29.gif", "https://upload.wikimedia.org/wikipedia/commons/6/6e/Golfer_swing.gif", "https://upload.wikimedia.org/wikipedia/commons/f/f7/Nuage_d_orage_time_lapse_antibes.gif" ];
+            useEffect(() => { loadRandomPlaceholder(); }, []);
+            const loadRandomPlaceholder = () => { const rawUrl = PLACEHOLDER_SOURCES[Math.floor(Math.random() * PLACEHOLDER_SOURCES.length)]; const urlWithCache = rawUrl.startsWith('blob:') ? rawUrl : `${rawUrl}?t=${Date.now()}`; setActiveUrl(urlWithCache); setSourceType('placeholder'); const isVideo = rawUrl.match(/\.(webm|mp4)/i) !== null; setIsVideoMode(isVideo); if (isVideo && videoRef.current) { videoRef.current.src = urlWithCache; videoRef.current.play().catch(e => console.log("Autoplay blocked", e)); } };
+            const startCamera = async () => { try { const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } }); if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); setSourceType('camera'); setIsVideoMode(true); setActiveUrl(''); } } catch (e) { console.error("Camera access denied", e); } };
+            const handleFile = (e) => { const file = e.target.files?.[0]; if (file) { if (activeUrl && activeUrl.startsWith('blob:')) URL.revokeObjectURL(activeUrl); const url = URL.createObjectURL(file); const isVideo = file.type.startsWith('video') || !!file.name.match(/\.(mp4|webm|mov|mkv)$/i); setActiveUrl(url); setSourceType('file'); setIsVideoMode(isVideo); if (isVideo && videoRef.current) { videoRef.current.srcObject = null; videoRef.current.src = url; videoRef.current.play(); videoRef.current.loop = true; } else if (videoRef.current) { videoRef.current.pause(); videoRef.current.src = ""; videoRef.current.srcObject = null; } e.target.value = ''; } };
+            const processFrame = () => { if (!isEnabled) return; if (!isVideoMode && sourceType !== 'camera') { const t = Date.now() / 1000; const noise = Math.random() * 0.15; const baseLfo = Math.sin(t * 8) * 0.5 + 0.5; const ghostMotion = Math.min(1.0, (baseLfo * 0.4) + noise + 0.1); const ghostLum = (Math.sin(t * 0.6) * 0.3) + 0.5; const ghostHue = (t * 12) % 360; audio.updateVisualModulation(ghostMotion, ghostLum, ghostHue); requestRef.current = requestAnimationFrame(processFrame); return; } const canvas = canvasRef.current; const source = videoRef.current; if (!canvas || !source) { requestRef.current = requestAnimationFrame(processFrame); return; } if (source.readyState < 2) { requestRef.current = requestAnimationFrame(processFrame); return; } const ctx = canvas.getContext('2d', { willReadFrequently: true }); if (!ctx) return; const w = 128; const h = 96; try { ctx.drawImage(source, 0, 0, w, h); } catch (e) { requestRef.current = requestAnimationFrame(processFrame); return; } const frameData = ctx.getImageData(0, 0, w, h); const data = frameData.data; const currentRawFrame = new Uint8ClampedArray(data); const len = data.length; let totalLum = 0; let totalR = 0; let totalG = 0; let totalB = 0; let motionSum = 0; for (let i = 0; i < len; i += 4) { const r = data[i]; const g = data[i + 1]; const b = data[i + 2]; const lum = 0.299 * r + 0.587 * g + 0.114 * b; totalLum += lum; totalR += r; totalG += g; totalB += b; if (prevFrameRef.current) { const diff = Math.abs(g - prevFrameRef.current[i+1]); if (diff > 20) motionSum += diff; } const threshold = 128 + (Math.random() - 0.5) * 40; const finalPixel = lum > threshold ? 255 : 0; data[i] = finalPixel; data[i+1] = finalPixel; data[i+2] = finalPixel; } prevFrameRef.current = currentRawFrame; ctx.putImageData(frameData, 0, 0); const pixelCount = w * h; const avgLum = totalLum / pixelCount / 255; const avgMotion = Math.min(1.0, (motionSum / pixelCount) / 100); const avgR = totalR / pixelCount; const avgG = totalG / pixelCount; const avgB = totalB / pixelCount; const hue = Math.atan2(Math.sqrt(3) * (avgG - avgB), 2 * avgR - avgG - avgB) * (180 / Math.PI); audio.updateVisualModulation(avgMotion, avgLum, (hue + 360) % 360); requestRef.current = requestAnimationFrame(processFrame); };
+            useEffect(() => { requestRef.current = requestAnimationFrame(processFrame); return () => { if(requestRef.current) cancelAnimationFrame(requestRef.current); }; }, [isEnabled, sourceType, isVideoMode]);
+            return ( <div className="panel-brutal bg-[#09090b] flex flex-col p-4 border-b border-[#27272a] gap-4 relative overflow-hidden"> <div className="flex justify-between items-center z-20"> <label className="text-[9px] font-bold text-zinc-500 tracking-widest flex items-center gap-2"><Eye size={10} className="text-[#ea580c]" /> VISUAL CORE</label> <button onClick={() => setIsEnabled(!isEnabled)} className={`text-[8px] border px-1 uppercase ${isEnabled ? 'border-[#06b6d4] text-[#06b6d4]' : 'border-zinc-700 text-zinc-600'}`}>{isEnabled ? 'ACTIVE' : 'OFFLINE'}</button> </div> <div className="relative aspect-video bg-black border border-[#27272a] overflow-hidden group z-10"> <video ref={videoRef} crossOrigin="anonymous" playsInline muted loop className="absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none z-0" /> <img key={activeUrl} ref={imgRef} src={!isVideoMode && sourceType !== 'camera' ? activeUrl : undefined} crossOrigin="anonymous" className={`absolute inset-0 w-full h-full object-contain image-pixelated filter grayscale contrast-[1.5] brightness-110 z-10 ${isVideoMode || sourceType === 'camera' ? 'hidden' : 'block'}`} alt="analysis-source" /> <canvas ref={canvasRef} width={128} height={96} className={`w-full h-full object-contain image-pixelated opacity-90 relative z-20 ${!isVideoMode && sourceType !== 'camera' ? 'hidden' : 'block'}`} /> <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%] bg-repeat z-30"></div> <div className="absolute top-1 left-1 text-[8px] font-mono text-[#ea580c] bg-black/50 px-1 z-40"> SRC: {sourceType.toUpperCase()} {isVideoMode ? '(VID)' : '(IMG)'} </div> </div> <div className="grid grid-cols-3 gap-1 z-20"> <button onClick={loadRandomPlaceholder} className={`btn-retro h-6 flex items-center justify-center gap-1 ${sourceType === 'placeholder' ? 'text-white border-zinc-500' : ''}`}> <ImageIcon size={10} /> <span className="text-[8px]">RND</span> </button> <button onClick={startCamera} className={`btn-retro h-6 flex items-center justify-center gap-1 ${sourceType === 'camera' ? 'text-[#ea580c] border-[#ea580c]' : ''}`}> <Camera size={10} /> <span className="text-[8px]">CAM</span> </button> <button onClick={() => fileInputRef.current?.click()} className={`btn-retro h-6 flex items-center justify-center gap-1 ${sourceType === 'file' ? 'text-[#06b6d4] border-[#06b6d4]' : ''}`}> <Upload size={10} /> <span className="text-[8px]">FILE</span> </button> </div> <input type="file" ref={fileInputRef} onChange={handleFile} accept="video/*,image/gif,image/webp,image/png,image/jpeg" className="hidden" /> </div> );
+        };
+
+        const FluxRig = ({ onToggle, active }) => {
+            const [state, setState] = useState({ active: false, tapeStopVal: 0.5, fracture: false, voltage: false, dimension: false, void: false, gater: false, smear: false, diffuser: false, mosaic: false, prismVal: 0, gravityX: 0.5, gravityY: 0.5, gravityEnabled: false });
+            const wellPhysics = useRef({ puckX: 0.5, puckY: 0.5, velX: 0, velY: 0, cursorX: 0.5, cursorY: 0.5, isDragging: false });
+            const leverRef = useRef(null); const ribbonRef = useRef(null); const gravityRef = useRef(null); const requestRef = useRef(null);
+
+            const update = () => {
+                const wp = wellPhysics.current;
+                if (wp.isDragging) { wp.puckX += (wp.cursorX - wp.puckX) * 0.2; wp.puckY += (wp.cursorY - wp.puckY) * 0.2; wp.velX = (wp.cursorX - wp.puckX) * 0.1; wp.velY = (wp.cursorY - wp.puckY) * 0.1; } 
+                else { const dx = 0.5 - wp.puckX; const dy = 0.5 - wp.puckY; wp.velX += dx * 0.001; wp.velY += dy * 0.001; if (wp.puckX < 0 || wp.puckX > 1) wp.velX *= -0.9; if (wp.puckY < 0 || wp.puckY > 1) wp.velY *= -0.9; wp.puckX += wp.velX; wp.puckY += wp.velY; wp.velX *= 0.98; wp.velY *= 0.98; }
+                setState(prev => ({ ...prev, gravityX: wp.puckX, gravityY: wp.puckY }));
+                audio.setFluxParams({ tapeVal: state.tapeStopVal, fracture: state.fracture, voltage: state.voltage, dimension: state.dimension, prismVal: state.prismVal, gater: state.gater, smear: state.smear, diffuser: state.diffuser, mosaic: state.mosaic, gravityX: wp.puckX, gravityY: wp.puckY, gravityEnabled: state.gravityEnabled });
+                if (active) requestRef.current = requestAnimationFrame(update);
+            };
+            useEffect(() => { if (active) requestRef.current = requestAnimationFrame(update); else if (requestRef.current) cancelAnimationFrame(requestRef.current); return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); }; }, [active, state.tapeStopVal, state.fracture, state.voltage, state.dimension, state.prismVal, state.gater, state.smear, state.diffuser, state.mosaic, state.gravityEnabled]);
+
+            const handleLeverMove = (e) => { 
+                if (!leverRef.current) return; 
+                const rect = leverRef.current.parentElement.getBoundingClientRect(); 
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
+                const rawY = clientY - rect.top; 
+                const normY = Math.max(0, Math.min(1, rawY / rect.height)); 
+                // Add deadzone for center
+                let finalY = normY;
+                if (Math.abs(finalY - 0.5) < 0.05) finalY = 0.5;
+                setState(p => ({ ...p, tapeStopVal: finalY })); 
+            };
+            const resetLever = () => setState(p => ({ ...p, tapeStopVal: 0.5 }));
+            const handleRibbonMove = (e) => { if (!ribbonRef.current) return; const rect = ribbonRef.current.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const normX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)); setState(p => ({ ...p, prismVal: normX })); };
+            const resetRibbon = () => setState(p => ({ ...p, prismVal: 0 }));
+            const handleGravityStart = (e) => { wellPhysics.current.isDragging = true; handleGravityMove(e); };
+            const handleGravityMove = (e) => { if (!gravityRef.current) return; const rect = gravityRef.current.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; wellPhysics.current.cursorX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)); wellPhysics.current.cursorY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)); };
+            const handleGravityEnd = () => { wellPhysics.current.isDragging = false; };
+
+            if (!active) return null;
+            return (
+                <div className="absolute bottom-0 left-0 right-0 h-72 bg-[#121215] border-t-2 border-[#ea580c] z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] flex select-none">
+                    <div className="w-32 border-r border-[#27272a] p-4 flex flex-col items-center bg-[#09090b] relative group"> 
+                        <div className="flex justify-between w-full mb-2 text-[8px] font-bold text-[#ea580c]"> <span>FAST</span> <span>STOP</span> </div> 
+                        <div className="flex-1 w-12 bg-[#18181b] border-2 border-[#27272a] relative rounded-md overflow-hidden cursor-ns-resize shadow-inner" onMouseDown={handleLeverMove} onMouseMove={(e) => e.buttons === 1 && handleLeverMove(e)} onTouchStart={handleLeverMove} onTouchMove={handleLeverMove} onDoubleClick={resetLever}> 
+                            <div className="absolute top-1/2 left-0 right-0 h-px bg-white/30 z-0"></div> 
+                            <div className="absolute left-0 right-0 bg-gradient-to-b from-cyan-900/50 via-transparent to-red-900/50 transition-all duration-75" style={{ top: state.tapeStopVal > 0.5 ? '50%' : `${state.tapeStopVal * 100}%`, bottom: state.tapeStopVal < 0.5 ? '50%' : `${(1-state.tapeStopVal) * 100}%` }}> </div> 
+                            <div ref={leverRef} className="absolute w-full h-8 bg-zinc-300 left-0 border-y-2 border-zinc-500 shadow-xl flex items-center justify-center z-10" style={{ top: `calc(${state.tapeStopVal * 100}% - 16px)` }}> <div className="w-8 h-1 bg-zinc-400 rounded-full"></div> </div> 
+                        </div> 
+                        <button onClick={resetLever} className="mt-2 text-[8px] font-bold border border-zinc-700 px-2 py-1 text-zinc-500 hover:text-white hover:border-white">RESET</button>
+                    </div>
+                    <div className="flex-1 p-6 grid grid-cols-8 gap-2 bg-[#101012] relative"> 
+                        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div> 
+                        {[ 
+                            { id: 'fracture', label: 'FRACTURE', icon: Zap, color: 'text-cyan-400', border: 'border-cyan-500', desc: 'BUFFER REPEAT' }, 
+                            { id: 'voltage', label: 'VOLTAGE', icon: Power, color: 'text-red-500', border: 'border-red-500', desc: 'BITCRUSH' }, 
+                            { id: 'gater', label: 'GATER', icon: Scissors, color: 'text-yellow-400', border: 'border-yellow-500', desc: 'RHYTHM CHOP' }, 
+                            { id: 'smear', label: 'SMEAR', icon: Wind, color: 'text-blue-300', border: 'border-blue-400', desc: 'SPECTRAL BLUR' }, 
+                            { id: 'diffuser', label: 'DIFFUSER', icon: Speaker, color: 'text-indigo-300', border: 'border-indigo-400', desc: 'METALLIC VERB' }, 
+                            { id: 'mosaic', label: 'MOSAIC', icon: LayoutGrid, color: 'text-pink-400', border: 'border-pink-500', desc: 'S&H FILTER' },
+                            { id: 'dimension', label: 'DIMENSION', icon: Move, color: 'text-purple-400', border: 'border-purple-500', desc: 'STEREO WIDEN' }, 
+                            { id: 'prism', label: 'PRISM', icon: Disc, color: 'text-green-400', border: 'border-green-500', desc: 'RING MOD' }, 
+                        ].map(pedal => { 
+                            const isActive = state[pedal.id]; 
+                            if (pedal.id === 'prism') return ( 
+                                <div key={pedal.id} className="relative flex flex-col justify-end h-full"> 
+                                    <div className="flex-1 bg-[#09090b] border border-zinc-700 relative overflow-hidden cursor-crosshair mb-2 rounded-sm group" ref={ribbonRef} onMouseDown={handleRibbonMove} onMouseMove={(e) => e.buttons === 1 && handleRibbonMove(e)} onMouseUp={resetRibbon} onMouseLeave={resetRibbon} onTouchStart={handleRibbonMove} onTouchMove={handleRibbonMove} onTouchEnd={resetRibbon} > 
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[10px] font-mono text-green-500/30 tracking-widest group-hover:text-green-500/60 transition-colors"> TOUCH TO WARP </div> 
+                                        <div className="absolute top-0 bottom-0 w-1 bg-green-400 shadow-[0_0_15px_currentColor]" style={{ left: `${state.prismVal * 100}%` }}></div> 
+                                    </div> 
+                                    <div className="h-10 bg-[#18181b] border border-green-900/50 flex items-center justify-center text-green-500 font-bold text-xs tracking-widest shadow-[0_0_10px_rgba(34,197,94,0.1)]"> PRISM </div> 
+                                </div> 
+                            ); 
+                            return ( 
+                                <button key={pedal.id} onClick={() => setState(p => ({ ...p, [pedal.id]: !p[pedal.id] }))} className={`relative group transition-all duration-75 ${isActive ? 'translate-y-[2px]' : 'hover:-translate-y-1'}`} > 
+                                    <div className={`h-full bg-[#18181b] border-2 ${isActive ? pedal.border : 'border-zinc-700'} rounded-sm flex flex-col items-center justify-center shadow-xl relative overflow-hidden`}> 
+                                        <div class={`absolute top-3 right-3 w-2 h-2 rounded-full ${isActive ? `bg-current shadow-[0_0_10px_currentColor] ${pedal.color}` : 'bg-zinc-900 border border-zinc-800'}`}></div> 
+                                        <pedal.icon size={28} className={`mb-2 ${isActive ? pedal.color : 'text-zinc-700'}`} /> 
+                                        <span className={`text-xs font-black tracking-[0.15em] ${isActive ? 'text-white' : 'text-zinc-600'}`}>{pedal.label}</span> 
+                                        <span class="text-[8px] text-zinc-600 mt-1 font-mono">{pedal.desc}</span> 
+                                    </div> 
+                                </button> 
+                            ) 
+                        })} 
+                    </div>
+                    <div class="w-64 border-l border-[#27272a] bg-[#09090b] p-4 flex flex-col"> 
+                        <div class="flex justify-between items-center mb-2"> 
+                            <span class="text-[9px] font-bold text-zinc-500 tracking-widest flex items-center gap-2"> <Activity size={10} class="text-[#ea580c]" /> GRAVITY MOD </span> 
+                            <button onClick={() => setState(p => ({...p, gravityEnabled: !p.gravityEnabled}))} class={`text-[8px] border px-1 uppercase ${state.gravityEnabled ? 'border-[#ea580c] text-[#ea580c]' : 'border-zinc-700 text-zinc-600'}`}> {state.gravityEnabled ? 'ENABLED' : 'DISABLED'} </button>
+                        </div> 
+                        <div ref={gravityRef} class={`flex-1 bg-[#121215] border border-[#27272a] relative overflow-hidden cursor-grab active:cursor-grabbing bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_70%)] ${!state.gravityEnabled ? 'opacity-30 grayscale pointer-events-none' : ''}`} onMouseDown={handleGravityStart} onMouseMove={(e) => e.buttons === 1 && handleGravityMove(e)} onMouseUp={handleGravityEnd} onMouseLeave={handleGravityEnd} onTouchStart={handleGravityStart} onTouchMove={handleGravityMove} onTouchEnd={handleGravityEnd} > 
+                            <div class="absolute top-1 left-1 text-[8px] text-zinc-700">OPEN</div> 
+                            <div class="absolute bottom-1 left-1 text-[8px] text-zinc-700">MUFFLE</div> 
+                            <div class="absolute bottom-1 right-1 text-[8px] text-zinc-700">CRUSH</div> 
+                            <div class="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none"></div> 
+                            <div class="absolute w-8 h-8 border-2 border-[#ea580c] bg-[#ea580c]/20 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_20px_rgba(234,88,12,0.3)] flex items-center justify-center backdrop-blur-sm" style={{ left: `${state.gravityX * 100}%`, top: `${state.gravityY * 100}%` }} > <div class="w-1.5 h-1.5 bg-white rounded-full"></div> </div> 
+                            <div class="absolute left-0 w-full h-px bg-[#ea580c]/30 pointer-events-none" style={{ top: `${state.gravityY * 100}%` }}></div> 
+                            <div class="absolute top-0 h-full w-px bg-[#ea580c]/30 pointer-events-none" style={{ left: `${state.gravityX * 100}%` }}></div> 
+                        </div> 
+                    </div>
+                    <button onClick={() => onToggle(false)} class="absolute -top-8 right-4 h-8 w-8 bg-[#ea580c] text-black flex items-center justify-center hover:bg-white transition-colors shadow-lg"> <XCircle size={18} /> </button>
+                </div>
+            );
+        };
+
+        const Canvas = ({ config, globalSettings, volumeMultiplier = 1.0, triggerGlitch = 0 }) => {
+            const canvasRef = useRef(null); const impactsRef = useRef([]); const settingsRef = useRef(globalSettings); const volumeRef = useRef(volumeMultiplier); const configRef = useRef(config); const glitchRef = useRef(0); const flockStepRef = useRef(0); const pulseRef = useRef(0); const currentGravityRef = useRef(0);
+            const stateRef = useRef({ balls: [], boids: [], rotation: 0, mousePos: null, isMouseDown: false, isRightClick: false, startTime: Date.now(), mouseTrail: [] });
+            
+            useEffect(() => { settingsRef.current = globalSettings; }, [globalSettings]); 
+            useEffect(() => { volumeRef.current = volumeMultiplier; }, [volumeMultiplier]); 
+            useEffect(() => { configRef.current = config; }, [config]); 
+            useEffect(() => { if (triggerGlitch > 0) glitchRef.current = 1.0; }, [triggerGlitch]);
+            
+            useEffect(() => {
+                const balls = []; for (let i = 0; i < Math.floor(config.ballCount); i++) balls.push({ id: `${config.id}-${i}`, pos: { x: Math.cos(Math.random()*Math.PI*2)*20, y: Math.sin(Math.random()*Math.PI*2)*20 }, vel: { x: (Math.random()-0.5)*config.initialSpeed, y: (Math.random()-0.5)*config.initialSpeed }, radius: config.ballSize, color: config.themeColor, trail: [], age: 0, lifeSpan: 600 + Math.random() * 1200 });
+                const boids = []; if (config.flock.enabled) for(let i=0; i<config.flock.boidCount; i++) boids.push({ pos: { x: (Math.random()-0.5)*100, y: (Math.random()-0.5)*100 }, vel: { x: (Math.random()-0.5)*config.flock.maxSpeed, y: (Math.random()-0.5)*config.flock.maxSpeed }, acc: { x:0, y:0 } });
+                stateRef.current.balls = balls; stateRef.current.boids = boids;
+            }, [config.id, config.ballCount, config.themeColor, config.flock.enabled, config.initialSpeed]);
+
+            const handleImpact = (pos, speed, wallIndex, width, height, type) => {
+                const conf = configRef.current; if (Math.random() > (conf.instrument.probability ?? 1.0)) return;
+                impactsRef.current.push({ pos: { ...pos }, life: 1.0, radius: type === 'ball' ? (5 + speed * 1.5) : 3, isGhost: false });
+                if (type === 'ball') pulseRef.current = Math.min(pulseRef.current + 0.4, 1.2);
+                if (settingsRef.current.isPlaying && volumeRef.current > 0) {
+                    const shapeRadius = Math.min(width, height) * 0.42;
+                    const pan = { x: Math.max(-1, Math.min(1, pos.x / shapeRadius)), y: Math.max(-1, Math.min(1, pos.y / shapeRadius)) };
+                    if (type === 'boid') {
+                        flockStepRef.current = (flockStepRef.current + 1) % (conf.flock.euclideanSteps || 16);
+                        if (checkEuclideanStep(flockStepRef.current, conf.flock.euclideanHits || 4, conf.flock.euclideanSteps || 16)) {
+                            audio.triggerDrum('glitch', volumeRef.current * 0.7, pan.x);
+                        }
+                    } else {
+                        let scaleDegree = wallIndex * 2; if (Math.random() > 0.96) scaleDegree += 7; 
+                        const freq = getFrequencyFromScale(settingsRef.current.rootKey, settingsRef.current.scale, conf.instrument.baseOctave, scaleDegree, settingsRef.current.analogDrift);
+                        audio.trigger(conf.instrument, freq, Math.min(Math.max(speed / 6, 0.2), 1.2) * volumeRef.current, pan);
+                    }
+                }
+            };
+
+            const updatePhysics = (width, height) => {
+                const state = stateRef.current; const settings = settingsRef.current; const conf = configRef.current; const shapeRadius = Math.min(width, height) * 0.42;
+                for (let i = impactsRef.current.length - 1; i >= 0; i--) { impactsRef.current[i].life -= 0.05; if (impactsRef.current[i].life <= 0) impactsRef.current.splice(i, 1); }
+                if (settings.timeScale === 0) return;
+                pulseRef.current *= 0.94; const audioLevel = audio.getAverageVolume(); const audioForce = audioLevel > 200 ? (audioLevel - 200) * 0.005 : 0; if (audioForce > 0.05) pulseRef.current = Math.min(1.0, pulseRef.current + 0.2);
+                if (glitchRef.current > 0.01) glitchRef.current *= 0.92; else glitchRef.current = 0;
+                state.rotation += conf.rotationSpeed * settings.rotationMultiplier * settings.timeScale;
+                let effectiveGravity = conf.gravity * settings.gravityMultiplier;
+                if (settings.gravityLfoEnabled) { const now = Date.now(); const period = (60000 / settings.bpm) * (1 / settings.gravityLfoRate); effectiveGravity += (Math.sin(((now - state.startTime) % period) / period * Math.PI * 2) * 0.35); }
+                currentGravityRef.current = effectiveGravity;
+                const vertices = conf.shapeType === 'star' ? generateStar(conf.vertexCount||5, shapeRadius, shapeRadius*0.4, {x:0,y:0}, state.rotation) : generatePolygon(conf.vertexCount||4, shapeRadius, {x:0,y:0}, state.rotation);
+                state.balls.forEach(ball => {
+                    ball.age++; if (ball.age > ball.lifeSpan) { impactsRef.current.push({ pos: {...ball.pos}, life: 1.0, radius: ball.radius * 3, isGhost: false }); ball.pos = { x: 0, y: 0 }; ball.vel = { x: (Math.random()-0.5)*10, y: (Math.random()-0.5)*10 }; ball.age = 0; ball.trail = []; if (settings.isPlaying && volumeRef.current > 0) audio.triggerDrum('glitch', 0.5 * volumeRef.current, 0); }
+                    if (!ball.trail) ball.trail = []; ball.trail.push(add(ball.pos, { x: (Math.random()-0.5)*2, y: (Math.random()-0.5)*2 })); if (ball.trail.length > 8) ball.trail.shift();
+                    ball.vel.y += effectiveGravity * settings.timeScale;
+                    if (audioForce > 0) { const dir = normalize(ball.pos); ball.vel = add(ball.vel, mult(dir, audioForce)); }
+                    if (conf.instrument.chaos && conf.instrument.chaos > 0) { const chaosForce = conf.instrument.chaos * 0.5 * settings.timeScale; ball.vel.x += (Math.random() - 0.5) * chaosForce; ball.vel.y += (Math.random() - 0.5) * chaosForce; }
+                    if (state.mousePos) {
+                        const dx = ball.pos.x - state.mousePos.x; const dy = ball.pos.y - state.mousePos.y; const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (state.isRightClick && dist > 1) { const force = (5000 / (dist + 10)) * settings.timeScale; ball.vel.x -= (dx/dist) * force * 0.2; ball.vel.y -= (dy/dist) * force * 0.2; ball.vel.x += (dy/dist) * force * 0.1; ball.vel.y -= (dx/dist) * force * 0.1; }
+                        else if (state.isMouseDown && dist < 300 && dist > 1) { const force = (3000 / (dist + 5)) * settings.timeScale * (settings.mouseForceMode === 'attract' ? -1 : 1); ball.vel.x += (dx/dist) * force * 0.15; ball.vel.y += (dy/dist) * force * 0.15; }
+                    }
+                    ball.vel = mult(ball.vel, 1 - conf.friction * settings.timeScale); ball.vel = limitVector(ball.vel, 25); if (mag(ball.vel) < 0.1) { ball.vel.x += (Math.random() - 0.5) * 0.5; ball.vel.y += (Math.random() - 0.5) * 0.5; }
+                    ball.pos = add(ball.pos, mult(ball.vel, settings.timeScale));
+                    for (let i = 0; i < vertices.length; i++) {
+                        const p1 = vertices[i]; const p2 = vertices[(i + 1) % vertices.length]; const edge = sub(p2, p1); const normal = normalize({ x: -edge.y, y: edge.x }); const relPos = sub(ball.pos, p1); const dist = dot(relPos, normal);
+                        if (dist < ball.radius) { ball.pos = add(ball.pos, mult(normal, ball.radius - dist)); const vDotN = dot(ball.vel, normal); if (vDotN < 0) { const now = performance.now(); if (!ball.lastImpactTime || now - ball.lastImpactTime > 80) { handleImpact(add(ball.pos, mult(normal, -ball.radius)), mag(ball.vel), i, width, height, 'ball'); ball.lastImpactTime = now; } const reflect = mult(normal, 2 * vDotN); ball.vel = mult(sub(ball.vel, reflect), conf.restitution); } }
+                    }
+                });
+                if (config.flock.enabled) {
+                     const { perceptionRadius, maxForce, maxSpeed, separationWeight, alignmentWeight, cohesionWeight } = config.flock;
+                     state.boids.forEach(boid => {
+                         let align = { x:0, y:0 }, cohesion = { x:0, y:0 }, separation = { x:0, y:0 }, total = 0;
+                         state.boids.forEach(other => { const d = mag(sub(boid.pos, other.pos)); if (other !== boid && d < perceptionRadius) { align = add(align, other.vel); cohesion = add(cohesion, other.pos); const diff = sub(boid.pos, other.pos); separation = add(separation, mult(diff, 1/(d*d))); total++; } });
+                         if (total > 0) { align = sub(mult(normalize(mult(align, 1/total)), maxSpeed), boid.vel); align = limitVector(align, maxForce); cohesion = sub(mult(normalize(sub(mult(cohesion, 1/total), boid.pos)), maxSpeed), boid.vel); cohesion = limitVector(cohesion, maxForce); separation = sub(mult(normalize(mult(separation, 1/total)), maxSpeed), boid.vel); separation = limitVector(separation, maxForce); }
+                         boid.acc = add(boid.acc, mult(align, alignmentWeight)); boid.acc = add(boid.acc, mult(cohesion, cohesionWeight)); boid.acc = add(boid.acc, mult(separation, separationWeight)); const centerDir = sub({x:0, y:0}, boid.pos); boid.acc = add(boid.acc, mult(normalize(centerDir), 0.01));
+                         state.balls.forEach(ball => { const d = mag(sub(boid.pos, ball.pos)); if (d < ball.radius + 15) { boid.acc = add(boid.acc, mult(normalize(sub(boid.pos, ball.pos)), 0.5)); if (Math.random() > 0.95 && settings.isPlaying) { const shapeRadius = Math.min(width, height) * 0.42; audio.triggerDrum('808', volumeRef.current * 0.8, Math.max(-1, Math.min(1, boid.pos.x/shapeRadius))); impactsRef.current.push({ pos: {...boid.pos}, life: 0.5, radius: 2, isGhost: false }); } } });
+                         boid.vel = limitVector(add(boid.vel, boid.acc), maxSpeed); boid.pos = add(boid.pos, mult(boid.vel, settings.timeScale)); boid.acc = { x:0, y:0 };
+                         if (mag(boid.pos) > shapeRadius) { boid.vel = add(boid.vel, mult(mult(normalize(boid.pos), -1), 2)); if (Math.random() > 0.98) handleImpact(boid.pos, mag(boid.vel), 0, width, height, 'boid'); }
+                     });
+                }
+            };
+
+            const draw = (ctx, width, height) => {
+                ctx.clearRect(0, 0, width, height); const center = { x: width/2, y: height/2 }; const conf = configRef.current;
+                if (glitchRef.current > 0.01) { const shake = glitchRef.current * 10; ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake); ctx.fillStyle = `rgba(234, 88, 12, ${glitchRef.current * 0.2})`; ctx.fillRect(0,0,width,height); }
+                let vertices = conf.shapeType === 'star' ? generateStar(conf.vertexCount||5, Math.min(width,height)*0.42, Math.min(width,height)*0.16, center, stateRef.current.rotation) : generatePolygon(conf.vertexCount||4, Math.min(width,height)*0.42, center, stateRef.current.rotation);
+                ctx.beginPath(); if (vertices.length) { ctx.moveTo(vertices[0].x, vertices[0].y); vertices.slice(1).forEach(v => ctx.lineTo(v.x, v.y)); ctx.closePath(); }
+                ctx.shadowColor = conf.themeColor; ctx.shadowBlur = 15 + pulseRef.current * 10; ctx.strokeStyle = conf.themeColor; ctx.lineWidth = 2 + pulseRef.current * 2; ctx.stroke();
+                ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2 + pulseRef.current * 2; ctx.setLineDash([2, 3]); ctx.stroke(); ctx.setLineDash([]);
+                if (settingsRef.current.gravityLfoEnabled) { const g = currentGravityRef.current; const gDir = g > 0 ? 1 : -1; ctx.save(); ctx.translate(center.x, center.y); ctx.fillStyle = gDir > 0 ? 'rgba(255, 255, 255, 0.1)' : 'rgba(234, 88, 12, 0.2)'; ctx.fillRect(width * 0.4, -Math.abs(g) * 50 * gDir, 4, Math.abs(g) * 50 * gDir); ctx.restore(); }
+                if (stateRef.current.isRightClick) { ctx.save(); ctx.translate(center.x + (stateRef.current.mousePos?.x || 0), center.y + (stateRef.current.mousePos?.y || 0)); ctx.beginPath(); const time = Date.now() * 0.01; for(let i=0; i<8; i++) { ctx.rotate(Math.PI / 4); ctx.moveTo(0,0); ctx.lineTo(Math.cos(time) * 50, Math.sin(time) * 50); } ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.stroke(); ctx.restore(); }
+                impactsRef.current.forEach(imp => { const x = center.x + imp.pos.x; const y = center.y + imp.pos.y; ctx.beginPath(); const currentRadius = Math.max(0, imp.radius * (2.5 - imp.life * 1.5)); ctx.arc(x, y, currentRadius, 0, Math.PI*2); if (imp.isGhost) { ctx.strokeStyle = 'rgba(100,100,100,0.3)'; ctx.setLineDash([2, 4]); ctx.stroke(); ctx.setLineDash([]); } else { ctx.strokeStyle = conf.themeColor; ctx.lineWidth = 2 * imp.life; ctx.globalAlpha = imp.life * 0.8; ctx.shadowColor = conf.themeColor; ctx.shadowBlur = 5; ctx.stroke(); ctx.shadowBlur = 0; ctx.globalAlpha = 1.0; } });
+                stateRef.current.balls.forEach(ball => { const x = center.x + ball.pos.x; const y = center.y + ball.pos.y; if (ball.trail && ball.trail.length > 1) { ctx.beginPath(); ball.trail.forEach((t, i) => { const tx = center.x + t.x; const ty = center.y + t.y; if (i===0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty); }); ctx.strokeStyle = ball.color; ctx.lineWidth = 1; ctx.globalAlpha = 0.4; ctx.stroke(); ctx.globalAlpha = 1.0; } const velocity = mag(ball.vel); const angle = Math.atan2(ball.vel.y, ball.vel.x); const stretch = Math.min(1.5, 1 + velocity * 0.05); const squash = 1 / stretch; ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.scale(stretch, squash); ctx.beginPath(); ctx.arc(0, 0, ball.radius, 0, Math.PI*2); ctx.fillStyle = ball.color; ctx.shadowColor = ball.color; ctx.shadowBlur = 10; ctx.fill(); ctx.shadowBlur = 0; ctx.fillStyle = `rgba(255,255,255,${0.6 * (1 - ball.age/ball.lifeSpan)})`; ctx.beginPath(); ctx.arc(-ball.radius*0.3, -ball.radius*0.3, ball.radius*0.3, 0, Math.PI*2); ctx.fill(); ctx.restore(); });
+                if (config.flock.enabled) { stateRef.current.boids.forEach(boid => { const x = center.x + boid.pos.x; const y = center.y + boid.pos.y; ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(boid.vel.y, boid.vel.x)); ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, 3); ctx.lineTo(-4, -3); ctx.closePath(); ctx.fillStyle = config.flock.color; ctx.fill(); ctx.restore(); }); }
+                if (stateRef.current.balls.length > 1) { ctx.strokeStyle = `rgba(255,255,255,0.1)`; ctx.lineWidth = 1; ctx.beginPath(); for (let i=0; i<stateRef.current.balls.length; i++) { for (let j=i+1; j<stateRef.current.balls.length; j++) { const b1 = stateRef.current.balls[i]; const b2 = stateRef.current.balls[j]; if (mag(sub(b1.pos, b2.pos)) < 60) { ctx.moveTo(center.x + b1.pos.x, center.y + b1.pos.y); ctx.lineTo(center.x + b2.pos.x, center.y + b2.pos.y); } } } ctx.stroke(); }
+            };
+
+            useEffect(() => {
+                const canvas = canvasRef.current; 
+                if (!canvas) return;
+                
+                let animationFrameId;
+                let intervalId = null; 
+                
+                const renderLoop = () => {
+                    if (canvas) {
+                        const rect = canvas.getBoundingClientRect();
+                        if (canvas.width !== rect.width || canvas.height !== rect.height) {
+                            canvas.width = rect.width;
+                            canvas.height = rect.height;
+                        }
+                        updatePhysics(canvas.width, canvas.height);
+                        // Only draw if visible
+                        if (document.visibilityState === 'visible') {
+                            draw(canvas.getContext('2d'), canvas.width, canvas.height);
+                            animationFrameId = requestAnimationFrame(renderLoop);
+                        }
+                    }
+                };
+
+                const startHiddenLoop = () => {
+                    if (intervalId) return; 
+                    // Use setInterval for background physics updates to keep audio triggers running
+                    intervalId = setInterval(() => {
+                        // We must set the width/height to avoid issues with getBoundingClientRect in a throttled state
+                        const rect = canvas.getBoundingClientRect();
+                        updatePhysics(rect.width, rect.height);
+                    }, 1000 / 60); // Attempt 60 FPS update rate (will be throttled by browser)
+                }
+
+                const stopHiddenLoop = () => {
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                    }
+                }
+
+                const handleVisibilityChange = () => {
+                    if (document.visibilityState === 'visible') {
+                        stopHiddenLoop();
+                        renderLoop(); // Restart drawing and RAF
+                    } else {
+                        cancelAnimationFrame(animationFrameId); // Stop drawing
+                        startHiddenLoop(); // Start physics-only update
+                    }
+                };
+
+                // Initial start based on current visibility
+                if (document.visibilityState === 'visible') {
+                    renderLoop();
+                } else {
+                    startHiddenLoop();
+                }
+                
+                // Add listener to manage the loop state
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                
+                const handleInteract = (e) => { 
+                    const rect = canvas.getBoundingClientRect(); 
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
+                    stateRef.current.mousePos = { x: clientX - rect.left - rect.width/2, y: clientY - rect.top - rect.height/2 }; 
+                    if ('button' in e && e.button === 2) stateRef.current.isRightClick = true; else stateRef.current.isMouseDown = true; 
+                };
+                const stopInteract = () => { stateRef.current.isMouseDown = false; stateRef.current.isRightClick = false; stateRef.current.mousePos = null; };
+                const handleContextMenu = (e) => { e.preventDefault(); };
+                
+                canvas.addEventListener('mousedown', handleInteract); 
+                canvas.addEventListener('mousemove', (e) => (stateRef.current.isMouseDown || stateRef.current.isRightClick) && handleInteract(e)); 
+                canvas.addEventListener('mouseup', stopInteract); 
+                canvas.addEventListener('mouseleave', stopInteract); 
+                canvas.addEventListener('touchstart', handleInteract, {passive: false}); 
+                canvas.addEventListener('touchmove', handleInteract, {passive: false}); 
+                canvas.addEventListener('touchend', stopInteract); 
+                canvas.addEventListener('contextmenu', handleContextMenu);
+                
+                return () => { 
+                    cancelAnimationFrame(animationFrameId); 
+                    clearInterval(intervalId);
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                    canvas.removeEventListener('mousedown', handleInteract); 
+                    canvas.removeEventListener('mousemove', handleInteract); 
+                    canvas.removeEventListener('mouseup', stopInteract); 
+                    canvas.removeEventListener('mouseleave', stopInteract); 
+                    canvas.removeEventListener('touchstart', handleInteract); 
+                    canvas.removeEventListener('touchmove', handleInteract); 
+                    canvas.removeEventListener('touchend', stopInteract); 
+                    canvas.removeEventListener('contextmenu', handleContextMenu); 
+                };
+            }, [config.id, config.ballCount, config.themeColor, config.flock.enabled, config.initialSpeed, config.ballSize]);
+
+            return <canvas ref={canvasRef} className="w-full h-full relative z-10" />;
+        };
+
+        const SimulationCard = ({ config, globalSettings, onUpdateConfig, triggerGlitch, soloId, onToggleSolo }) => {
+            const [muted, setMuted] = useState(false); const [showPicker, setShowPicker] = useState(false); const fileInputRef = useRef(null);
+            const isAnySolo = soloId != null; const isThisSolo = soloId === config.id; const isAudible = isAnySolo ? isThisSolo : !muted;
+            const volume = (config.instrument.vol ?? 0.5) * (isAudible ? 1 : 0);
+            const currentPatch = SOUND_LIBRARY.find(p => p.id === config.instrument.soundId) || SOUND_LIBRARY[0];
+            const loadPatch = (direction) => { if (!onUpdateConfig || config.locked) return; let patch; if (direction === 'random') patch = getRandomPatch(); else if (direction === 'next') patch = getNextPatch(config.instrument.soundId); else patch = getPrevPatch(config.instrument.soundId); onUpdateConfig(config.id, { themeColor: patch.themeColor, instrument: { ...patch.config, soundId: patch.id, probability: config.instrument.probability } }); };
+            const applyPatch = (patch) => { if (!onUpdateConfig) return; onUpdateConfig(config.id, { themeColor: patch.themeColor, instrument: { ...patch.config, soundId: patch.id, probability: config.instrument.probability } }); setShowPicker(false); };
+            const toggleLock = () => { if (onUpdateConfig) onUpdateConfig(config.id, { locked: !config.locked }); };
+            const handleFileChange = async (e) => { const file = e.target.files?.[0]; if (!file || !onUpdateConfig) return; try { const arrayBuffer = await file.arrayBuffer(); const audioBuffer = await audio.decodeAudioData(arrayBuffer); onUpdateConfig(config.id, { instrument: { ...config.instrument, sourceType: 'sampler', sampleBuffer: audioBuffer, sampleUrl: file.name } }); } catch (err) {} };
+            const updateMacro = (key, val) => { if(onUpdateConfig) onUpdateConfig(config.id, { instrument: { ...config.instrument, [key]: val } }); };
+            const updateFlock = (key, val) => { if (!onUpdateConfig) return; onUpdateConfig(config.id, { flock: { ...config.flock, [key]: val } }); };
+            const isGranular = config.instrument.sourceType === 'granular'; const isSampler = config.instrument.sourceType === 'sampler';
+            return (
+                <div className="panel-brutal flex flex-col h-full group overflow-hidden bg-[#121215] relative">
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="audio/*" className="hidden" />
+                    <div className="flex items-stretch h-8 border-b border-[#27272a]">
+                        <div className="w-8 flex items-center justify-center border-r border-[#27272a] bg-[#09090b]"> <div class={`w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] ${globalSettings.isPlaying && isAudible ? 'bg-green-500 text-green-500' : 'bg-red-900 text-red-900'}`}></div> </div>
+                        <div className="flex-1 flex items-center px-3 overflow-hidden bg-[#18181b]"> <span class="font-mono text-[10px] font-bold tracking-widest uppercase truncate text-zinc-400"> MOD_{config.id.toString().padStart(2,'0')} // <span style={{color: isAudible ? config.themeColor : '#52525b'}}>{config.name}</span> </span> </div>
+                        <div className="flex"> <button onClick={toggleLock} class={`w-8 flex items-center justify-center border-l border-[#27272a] hover:bg-[#27272a] transition-colors ${config.locked ? 'text-[#ea580c]' : 'text-zinc-600'}`}>{config.locked ? <Lock size={10} /> : <Unlock size={10} />}</button> <button onClick={() => !config.locked && loadPatch('random')} class={`w-8 flex items-center justify-center border-l border-[#27272a] transition-colors ${config.locked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#27272a] text-zinc-500 hover:text-white'}`}><Dices size={12} /></button> <button onClick={() => onToggleSolo && onToggleSolo(config.id)} class={`w-8 flex items-center justify-center border-l border-[#27272a] transition-colors ${isThisSolo ? 'bg-yellow-500 text-black hover:bg-yellow-400' : (isAnySolo ? 'text-zinc-700' : 'hover:bg-[#27272a] text-zinc-500 hover:text-white')}`}><Headphones size={12} /></button> <button onClick={() => setMuted(!muted)} class={`w-8 flex items-center justify-center border-l border-[#27272a] transition-colors ${muted ? 'bg-red-900/20 text-red-500' : 'hover:bg-[#27272a] text-zinc-500'}`}>{muted ? <VolumeX size={12} /> : <Volume2 size={12} />}</button> </div>
+                    </div>
+                    <div className="relative aspect-square bg-[#09090b] border-b border-[#27272a]">
+                        <div class="absolute inset-0 bg-[linear-gradient(to_right,#18181b_1px,transparent_1px),linear-gradient(to_bottom,#18181b_1px,transparent_1px)] bg-[size:20px_20px] opacity-20 pointer-events-none"></div>
+                        <div class="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-0 border border-[#27272a] bg-[#09090b] shadow-lg"> <button onClick={() => loadPatch('prev')} disabled={config.locked} class="px-1.5 py-1 hover:bg-[#27272a] text-zinc-500 disabled:opacity-30"><ChevronLeft size={10} /></button> <div class={`px-2 py-1 text-[9px] font-mono font-bold tracking-wider uppercase min-w-[80px] text-center cursor-pointer flex items-center justify-center gap-1 ${config.locked ? 'text-zinc-600' : 'text-zinc-300 hover:text-white'}`} onClick={() => !config.locked && setShowPicker(!showPicker)}> {isGranular ? 'GRN: CLOUD' : (isSampler ? 'SMPL: USER' : currentPatch.name)} <ListMusic size={8} class="text-zinc-500" /> </div> <button onClick={() => loadPatch('next')} disabled={config.locked} class="px-1.5 py-1 hover:bg-[#27272a] text-zinc-500 disabled:opacity-30"><ChevronRight size={10} /></button> </div>
+                        {config.flock.enabled && ( <div class="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between px-2 py-1 bg-[#09090b]/80 border border-[#27272a] backdrop-blur-sm"> <div class="flex items-center gap-2"> <GitCommit size={10} class="text-[#ea580c]" /> <span class="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Euclid</span> </div> <div class="flex gap-3"> <div class="flex items-center gap-1"> <span class="text-[8px] text-zinc-600">HITS</span> <input type="number" min="1" max="16" value={config.flock.euclideanHits} onChange={(e) => updateFlock('euclideanHits', parseInt(e.target.value))} class="w-8 bg-[#18181b] border border-[#27272a] text-[9px] text-center text-zinc-300 focus:border-[#ea580c] focus:outline-none" /> </div> <div class="flex items-center gap-1"> <span class="text-[8px] text-zinc-600">STEPS</span> <input type="number" min="2" max="32" value={config.flock.euclideanSteps} onChange={(e) => updateFlock('euclideanSteps', parseInt(e.target.value))} class="w-8 bg-[#18181b] border border-[#27272a] text-[9px] text-center text-zinc-300 focus:border-[#ea580c] focus:outline-none" /> </div> </div> </div> )}
+                        {showPicker && <PatchPicker currentId={config.instrument.soundId || ''} onSelect={applyPatch} onClose={() => setShowPicker(false)} />}
+                        <Canvas config={config} globalSettings={globalSettings} volumeMultiplier={isAudible ? 1 : 0} triggerGlitch={triggerGlitch} />
+                    </div>
+                    <div class={`flex-1 p-3 bg-[#121215] grid grid-cols-5 gap-1.5 items-end transition-opacity duration-300 ${isAudible ? 'opacity-100' : 'opacity-40 grayscale'}`}>
+                        {['timbre', 'time', 'color', 'drive', 'probability'].map((k, i) => { const icons = [Waves, Clock, Palette, Flame, Zap]; const Icon = icons[i]; return ( <div key={k} class="flex flex-col gap-1.5 group"> <div class="flex justify-between items-end"> <span class="text-[7px] font-bold tracking-widest text-zinc-500 group-hover:text-zinc-300">{k === 'timbre' && isGranular ? 'GRAIN' : k.substring(0,4).toUpperCase()}</span> <Icon size={7} class="text-zinc-600 group-hover:text-cyan-400" /> </div> <input type="range" min="0" max="1" step="0.01" value={config.instrument[k] ?? 0.5} onChange={(e) => updateMacro(k, parseFloat(e.target.value))} class="w-full accent-cyan-500" /> </div> ) })}
+                    </div>
+                    <div class="h-1 bg-[#09090b] w-full overflow-hidden flex gap-0.5 px-3 pb-3"> {Array.from({length: 20}).map((_, i) => ( <div key={i} class="flex-1 h-1 bg-[#27272a] opacity-20"></div> ))} <div class="absolute h-1 left-3 right-3 bg-gradient-to-r from-transparent via-current to-transparent opacity-30" style={{color: config.themeColor, width: `${(volume * 100) * 0.8}%`}}></div> </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 7. MAIN APP COMPONENT
+        // ==========================================
+        const App = () => {
+            const [configs, setConfigs] = useState(presets);
+            const [settings, setSettings] = useState({ 
+                isPlaying: false, // Starts paused until button click
+                bpm: 120, 
+                rootKey: 'C', 
+                scale: 'minor',
+                timeScale: 1.0, 
+                gravityMultiplier: 1.0,
+                rotationMultiplier: 1.0,
+                analogDrift: 0.05,
+                mouseForceMode: 'repel',
+                gravityLfoEnabled: false,
+                gravityLfoRate: 0.1
+            });
+            const [banks, setBanks] = useState(Array(6).fill(null));
+            const [storeMode, setStoreMode] = useState(false);
+            const [isRecording, setIsRecording] = useState(false);
+            const [glitchTrigger, setGlitchTrigger] = useState(0);
+            const [fluxActive, setFluxActive] = useState(true); // Default to OPEN
+            const [soloId, setSoloId] = useState(null);
+            const [env, setEnv] = useState({ drone: 0.6, noise: 0, reverb: 0.3, delay: 0.3 }); // Drone default 0.6
+            const [showIntro, setShowIntro] = useState(true); // Show intro initially
+            const fileInputRef = useRef(null);
+
+            // FIX 1: Resume AudioContext when tab becomes visible.
+            // This prevents the audio engine itself from stopping when the tab loses focus.
+            useEffect(() => {
+                const handleVisibilityChange = () => {
+                    // Check if the document is visible and the AudioContext is suspended
+                    if (document.visibilityState === 'visible') {
+                        if (audio.ctx && audio.ctx.state === 'suspended') {
+                            audio.resume();
+                        }
+                    }
+                };
+
+                // Attach the event listener to the document
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+
+                // Cleanup the event listener when the component unmounts
+                return () => {
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                };
+            }, []); // Empty dependency array ensures it runs once on mount
+
+            const togglePlay = () => {
+                if (!audio.ctx) audio.init();
+                audio.resume();
+                setSettings(p => ({ ...p, isPlaying: !p.isPlaying }));
+            };
+
+            const updateConfig = (id, newConfig) => {
+                setConfigs(prev => prev.map(c => c.id === id ? { ...c, ...newConfig } : c));
+            };
+
+            const mutate = () => {
+                setConfigs(prev => prev.map(c => {
+                    if (c.locked) return c;
+                    const patch = getRandomPatch();
+                    return {
+                        ...c,
+                        themeColor: patch.themeColor,
+                        instrument: { ...patch.config, soundId: patch.id, probability: c.instrument.probability },
+                        vertexCount: Math.floor(Math.random() * 5) + 3,
+                        rotationSpeed: (Math.random() - 0.5) * 0.02
+                    };
+                }));
+                setGlitchTrigger(prev => prev + 1);
+            };
+
+            const evolve = () => {
+                const newBpm = 60 + Math.floor(Math.random() * 100);
+                const newKey = NOTES[Math.floor(Math.random() * NOTES.length)];
+                const newScale = Object.keys(SCALES_INTERVALS)[Math.floor(Math.random() * Object.keys(SCALES_INTERVALS).length)];
+                
+                setSettings(prev => ({
+                    ...prev,
+                    bpm: newBpm,
+                    rootKey: newKey,
+                    scale: newScale,
+                    timeScale: 0.5 + Math.random(),
+                    gravityMultiplier: 0.5 + Math.random()
+                }));
+                
+                audio.setBPM(newBpm);
+                audio.setGlobalKey(newKey);
+                mutate(); 
+            };
+
+            const handleIntroClick = () => {
+                if (!audio.ctx) audio.init();
+                audio.resume();
+                setSettings(p => ({...p, isPlaying: true}));
+                evolve(); // Randomize immediately on start
+                setShowIntro(false);
+            };
+
+            const handleBankClick = (index) => {
+                if (storeMode) {
+                    // Save to Bank
+                    const newBanks = [...banks];
+                    newBanks[index] = {
+                        configs: JSON.parse(JSON.stringify(configs)),
+                        settings: { ...settings },
+                        env: { ...env }
+                    };
+                    setBanks(newBanks);
+                    setStoreMode(false); // Turn off store mode after saving
+                } else {
+                    // Load from Bank
+                    const bank = banks[index];
+                    if (bank) {
+                        setConfigs(bank.configs);
+                        setSettings(bank.settings);
+                        setEnv(bank.env);
+                        audio.setBPM(bank.settings.bpm);
+                        audio.setGlobalKey(bank.settings.rootKey);
+                        audio.updateEnvironment(bank.env.drone, bank.env.noise, bank.env.reverb, bank.env.delay);
+                        setGlitchTrigger(prev => prev + 1);
+                    }
+                }
+            };
+
+            const handleRecord = async () => {
+                if (isRecording) {
+                    const blob = await audio.stopRecording();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `biogrid-session-${Date.now()}.wav`;
+                    a.click();
+                    setIsRecording(false);
+                } else {
+                    audio.startRecording();
+                    setIsRecording(true);
+                }
+            };
+
+            const savePreset = () => {
+                const data = JSON.stringify({ configs, settings, env, banks }, null, 2);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `biogrid-set-${Date.now()}.json`;
+                a.click();
+            };
+
+            const loadPreset = (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.configs) setConfigs(data.configs);
+                        if (data.settings) {
+                            setSettings(data.settings);
+                            audio.setBPM(data.settings.bpm);
+                            audio.setGlobalKey(data.settings.rootKey);
+                        }
+                        if (data.env) {
+                            setEnv(data.env);
+                            audio.updateEnvironment(data.env.drone, data.env.noise, data.env.reverb, data.env.delay);
+                        }
+                        if (data.banks) setBanks(data.banks);
+                    } catch (err) {
+                        console.error("Invalid preset file");
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            };
+
+            return (
+                <div class="w-screen h-screen flex flex-col bg-[#09090b] text-zinc-300 overflow-hidden relative">
+                    <div class="noise-overlay"></div>
+                    
+                    {/* Header */}
+                    <header class="h-14 border-b border-[#27272a] bg-[#09090b] flex items-center justify-between px-4 z-50 select-none">
+                        <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-2 mr-4">
+                                <div class="w-3 h-3 bg-[#ea580c] shadow-[0_0_10px_#ea580c]"></div>
+                                <h1 class="font-bold text-lg tracking-tight text-white">BioGrid<span class="text-[#ea580c]">OS</span></h1>
+                                <span class="text-[10px] bg-[#27272a] px-1.5 py-0.5 rounded text-zinc-500 font-mono">v4.0</span>
+                            </div>
+                            
+                            <div class="h-8 w-px bg-[#27272a]"></div>
+                            
+                            <div class="flex items-center gap-1">
+                                <button onClick={togglePlay} class={`w-10 h-8 flex items-center justify-center border border-[#27272a] transition-all ${settings.isPlaying ? 'bg-[#ea580c] text-white' : 'bg-[#121215] hover:border-zinc-500'}`}>
+                                    {settings.isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                                </button>
+                                <button onClick={() => { setSettings(p => ({...p, isPlaying: false})); setTimeout(() => setSettings(p => ({...p, isPlaying: true})), 10); }} class="w-8 h-8 flex items-center justify-center border border-[#27272a] bg-[#121215] hover:text-white">
+                                    <RefreshCw size={12} />
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-2 bg-[#121215] border border-[#27272a] px-2 h-8">
+                                <span class="text-[10px] font-bold text-zinc-500">BPM</span>
+                                <input type="number" value={settings.bpm} onChange={e => { const v = parseInt(e.target.value); setSettings(p => ({...p, bpm: v})); audio.setBPM(v); }} class="w-10 bg-transparent text-xs font-mono text-center focus:outline-none text-[#ea580c]" />
+                            </div>
+
+                            <div class="flex items-center gap-2 bg-[#121215] border border-[#27272a] px-2 h-8">
+                                <select value={settings.rootKey} onChange={e => { setSettings(p => ({...p, rootKey: e.target.value})); audio.setGlobalKey(e.target.value); }} class="bg-transparent text-[10px] font-bold text-zinc-400 focus:outline-none uppercase">
+                                    {NOTES.map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                                <select value={settings.scale} onChange={e => setSettings(p => ({...p, scale: e.target.value}))} class="bg-transparent text-[10px] font-bold text-zinc-400 focus:outline-none uppercase w-20">
+                                    {Object.keys(SCALES_INTERVALS).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <MasterVisualizer />
+                            
+                            {/* BANK CONTROLS */}
+                            <div class="flex items-center gap-1 bg-[#121215] border border-[#27272a] p-1">
+                                <button 
+                                    onClick={() => setStoreMode(!storeMode)} 
+                                    class={`h-6 px-2 text-[9px] font-bold tracking-widest border transition-all ${storeMode ? 'bg-red-600 text-white border-red-600 animate-pulse' : 'bg-[#18181b] text-zinc-500 border-transparent hover:text-white'}`}
+                                >
+                                    {storeMode ? 'STORE' : 'REC'}
+                                </button>
+                                <div class="w-px h-4 bg-[#27272a] mx-1"></div>
+                                {[0,1,2,3,4,5].map(i => (
+                                    <button 
+                                        key={i}
+                                        onClick={() => handleBankClick(i)}
+                                        class={`w-6 h-6 text-[10px] font-mono border transition-all ${banks[i] ? (storeMode ? 'border-red-900 text-red-500' : 'border-[#ea580c] text-[#ea580c]') : 'border-zinc-800 text-zinc-600'} ${storeMode ? 'hover:bg-red-900/20' : 'hover:bg-[#ea580c]/10'}`}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div class="flex items-center gap-1">
+                                <button onClick={mutate} class="h-8 px-3 flex items-center gap-2 border border-[#27272a] bg-[#121215] hover:text-cyan-400 hover:border-cyan-400 transition-colors text-[10px] font-bold tracking-widest text-zinc-400" title="Randomize Instruments">
+                                    <Shuffle size={12} /> MUTATE
+                                </button>
+                                <button onClick={evolve} class="h-8 px-3 flex items-center gap-2 border border-[#27272a] bg-[#121215] hover:text-purple-400 hover:border-purple-400 transition-colors text-[10px] font-bold tracking-widest text-zinc-400" title="Randomize Everything">
+                                    <Globe size={12} /> EVOLVE
+                                </button>
+                                <div class="w-px h-8 bg-[#27272a] mx-1"></div>
+                                <button onClick={() => fileInputRef.current?.click()} class="h-8 w-8 flex items-center justify-center border border-[#27272a] bg-[#121215] hover:text-white transition-colors" title="Load Set">
+                                    <FileUp size={14} />
+                                </button>
+                                <button onClick={savePreset} class="h-8 w-8 flex items-center justify-center border border-[#27272a] bg-[#121215] hover:text-white transition-colors" title="Save Set">
+                                    <Save size={14} />
+                                </button>
+                                <input type="file" ref={fileInputRef} onChange={loadPreset} accept=".json" class="hidden" />
+                                <div class="w-px h-8 bg-[#27272a] mx-1"></div>
+                                <button onClick={() => setFluxActive(!fluxActive)} class={`h-8 px-3 flex items-center gap-2 border text-[10px] font-bold tracking-widest transition-all ${fluxActive ? 'bg-[#ea580c] text-black border-[#ea580c]' : 'bg-[#121215] border-[#27272a] text-zinc-400'}`}>
+                                    <Activity size={12} /> FLUX
+                                </button>
+                                <button onClick={handleRecord} class={`h-8 w-8 flex items-center justify-center border border-[#27272a] transition-colors ${isRecording ? 'bg-red-900 text-red-500 border-red-500 animate-pulse' : 'bg-[#121215] hover:text-white'}`}>
+                                    <div class={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500' : 'bg-zinc-600'}`}></div>
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <div class="flex-1 flex overflow-hidden relative">
+                        {/* Sidebar */}
+                        <div class="w-64 bg-[#09090b] border-r border-[#27272a] flex flex-col z-30">
+                            <VisualModulator />
+                            <div class="flex-1 p-4 overflow-y-auto custom-scrollbar">
+                                <div class="mb-6">
+                                    <div class="text-[9px] font-bold text-zinc-500 tracking-widest mb-3 flex items-center gap-2"><SlidersHorizontal size={10} /> GLOBAL PHYSICS</div>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <div class="flex justify-between text-[8px] mb-1"><span>TIME SCALE</span> <span class="text-[#ea580c]">{settings.timeScale.toFixed(2)}x</span></div>
+                                            <input type="range" min="0" max="2" step="0.01" value={settings.timeScale} onChange={e => setSettings(p => ({...p, timeScale: parseFloat(e.target.value)}))} class="w-full" />
+                                        </div>
+                                        <div>
+                                            <div class="flex justify-between text-[8px] mb-1"><span>GRAVITY</span> <span class="text-[#ea580c]">{settings.gravityMultiplier.toFixed(2)}x</span></div>
+                                            <input type="range" min="0" max="3" step="0.01" value={settings.gravityMultiplier} onChange={e => setSettings(p => ({...p, gravityMultiplier: parseFloat(e.target.value)}))} class="w-full" />
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[8px] text-zinc-400">GRAVITY LFO</span>
+                                            <button onClick={() => setSettings(p => ({...p, gravityLfoEnabled: !p.gravityLfoEnabled}))} class={`w-8 h-4 rounded-full border relative transition-colors ${settings.gravityLfoEnabled ? 'bg-[#ea580c] border-[#ea580c]' : 'bg-transparent border-zinc-600'}`}>
+                                                <div class={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full transition-all ${settings.gravityLfoEnabled ? 'left-4' : 'left-0.5'}`}></div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-6">
+                                    <div class="text-[9px] font-bold text-zinc-500 tracking-widest mb-3 flex items-center gap-2"><CloudFog size={10} /> ENVIRONMENT</div>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <div class="flex justify-between text-[8px] mb-1"><span>DRONE</span></div>
+                                            <input type="range" min="0" max="1" step="0.01" value={env.drone} onChange={e => { const v = parseFloat(e.target.value); setEnv(p => ({...p, drone: v})); audio.updateEnvironment(v, env.noise, env.reverb, env.delay); }} class="w-full" />
+                                        </div>
+                                        <div>
+                                            <div class="flex justify-between text-[8px] mb-1"><span>NOISE FLOOR</span></div>
+                                            <input type="range" min="0" max="1" step="0.01" value={env.noise} onChange={e => { const v = parseFloat(e.target.value); setEnv(p => ({...p, noise: v})); audio.updateEnvironment(env.drone, v, env.reverb, env.delay); }} class="w-full" />
+                                        </div>
+                                        <div>
+                                            <div class="flex justify-between text-[8px] mb-1"><span>GLOBAL FILTER</span></div>
+                                            <input type="range" min="0" max="1" step="0.01" defaultValue="1" onChange={e => audio.setGlobalFilter(parseFloat(e.target.value))} class="w-full" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Grid */}
+                        <div class="flex-1 bg-[#0c0c0e] p-4 overflow-y-auto custom-scrollbar relative">
+                            <div class="absolute inset-0 bg-grid-pattern opacity-50 pointer-events-none fixed"></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-32 relative z-10">
+                                {configs.map(config => (
+                                    <SimulationCard 
+                                        key={config.id} 
+                                        config={config} 
+                                        globalSettings={settings} 
+                                        onUpdateConfig={updateConfig}
+                                        triggerGlitch={glitchTrigger}
+                                        soloId={soloId}
+                                        onToggleSolo={(id) => setSoloId(soloId === id ? null : id)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <FluxRig active={fluxActive} onToggle={setFluxActive} />
+
+                    {/* Intro Overlay */}
+                    {showIntro && (
+                        <div class="fixed inset-0 z-[100] bg-[#09090b] flex items-center justify-center">
+                            <div class="max-w-md w-full p-8 border border-[#27272a] bg-[#121215] relative overflow-hidden">
+                                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#ea580c] to-purple-600"></div>
+                                <h1 class="text-4xl font-black text-white mb-2 tracking-tighter">BioGrid<span class="text-[#ea580c]">OS</span></h1>
+                                <p class="text-zinc-400 font-mono text-xs mb-8 leading-relaxed">
+                                    Generative Audio/Visual Workstation v4.0<br/>
+                                    Neural acoustics meets physics simulation.
+                                </p>
+                                <div class="space-y-4 mb-8">
+                                    <div class="flex items-center gap-3 text-sm text-zinc-300">
+                                        <div class="w-8 h-8 rounded bg-[#18181b] border border-[#27272a] flex items-center justify-center text-[#ea580c]"><Move size={16} /></div>
+                                        <span>Physics-based sequencers</span>
+                                    </div>
+                                    <div class="flex items-center gap-3 text-sm text-zinc-300">
+                                        <div class="w-8 h-8 rounded bg-[#18181b] border border-[#27272a] flex items-center justify-center text-cyan-400"><Eye size={16} /></div>
+                                        <span>Camera-controlled modulation</span>
+                                    </div>
+                                    <div class="flex items-center gap-3 text-sm text-zinc-300">
+                                        <div class="w-8 h-8 rounded bg-[#18181b] border border-[#27272a] flex items-center justify-center text-purple-400"><Activity size={16} /></div>
+                                        <span>Live FX & Flux Rig</span>
+                                    </div>
+                                </div>
+                                <button onClick={handleIntroClick} class="w-full h-12 bg-[#ea580c] text-black font-bold tracking-widest hover:bg-white transition-colors uppercase">
+                                    Initialize System
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
